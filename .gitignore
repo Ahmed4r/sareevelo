@@ -1,0 +1,5 @@
+node_modules/
+
+# Keep Markdown documentation local, except the project README.
+*.md
+!/README.md

@@ -1,11 +1,11 @@
 {
-  "name": "flowops-frontend",
+  "name": "sareevelo-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "start": "ng serve --host 0.0.0.0",
     "build": "ng build",
-    "test": "ng test"
+    "test": "node --test tests/orders.test.mjs"
   },
   "dependencies": {
     "@angular/animations": "^20.3.0",

@@ -1,55 +1,107 @@
-<div class="shell">
-  <aside class="sidebar">
-    <div class="logo"><span class="logo-icon">◈</span><span>flow<span class="logo-light">ops</span><small>CONTROL CENTER</small></span></div>
-    <div class="workspace"><div class="workspace-icon">F</div><div><strong>FlowOps Demo</strong><small>Enterprise workspace</small></div><span class="chevron">⌄</span></div>
-    <p class="side-label">WORKSPACE</p>
-    <nav aria-label="Main navigation">
-      <button [class.active]="currentTab() === 'Overview'" (click)="setTab('Overview')"><span>◫</span> Overview</button>
-      <button [class.active]="currentTab() === 'Deliveries'" (click)="setTab('Deliveries')"><span>▤</span> Deliveries <i>{{orders().length}}</i></button>
-      <button [class.active]="currentTab() === 'Fleet'" (click)="setTab('Fleet')"><span>◈</span> Fleet management</button>
-      <button [class.active]="currentTab() === 'Activity'" (click)="setTab('Activity')"><span>◷</span> Activity log</button>
-    </nav>
-    <p class="side-label tools-label">WORKSPACE TOOLS</p>
-    <nav><button (click)="setTab('Settings')"><span>⚙</span> Settings</button></nav>
-    <div class="sidebar-bottom"><div class="status-dot"></div><span>All systems operational</span></div>
-    <div class="account"><div class="avatar">AH</div><div><strong>Admin Workspace</strong><small>Demo environment</small></div><span class="chevron">⋯</span></div>
-  </aside>
-  <div class="main-area">
-    <header class="topbar"><div class="crumb">Workspace <span>/</span> <b>{{currentTab()}}</b></div><div class="topbar-right"><span class="live-badge"><span class="pulse"></span>{{isSimulating() ? 'LIVE SIMULATION' : 'DEMO MODE'}}</span><span class="clock">PASSAU, DE</span><div class="top-avatar">AH</div></div></header>
-    <main class="content">
-      <div class="heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> OPERATIONS INTELLIGENCE</div><h1>{{currentTab() === 'Overview' ? 'Command center' : currentTab()}}</h1><p>{{currentTab() === 'Overview' ? 'Your logistics network, at a glance.' : 'Manage and monitor your logistics operations.'}}</p></div><div class="heading-actions"><button class="ghost-btn" (click)="toggleSimulation()"><span>{{isSimulating() ? 'Ⅱ' : '▷'}}</span>{{isSimulating() ? 'Pause simulation' : 'Run simulation'}}</button><button class="primary-btn" (click)="showNewOrder.set(true)"><span>＋</span> New delivery</button></div></div>
-
-      @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
-        <section class="kpis" aria-label="Operations overview">
-          <div class="kpi"><div class="kpi-top"><span>ACTIVE DELIVERIES</span><span class="kpi-icon teal">↗</span></div><div class="kpi-num">{{summary().activeDeliveries | number:'2.0'}}</div><div class="kpi-foot"><span class="good">●</span> Currently on the road</div></div>
-          <div class="kpi"><div class="kpi-top"><span>DELIVERED TODAY</span><span class="kpi-icon purple">✓</span></div><div class="kpi-num">{{summary().deliveredToday | number:'2.0'}}</div><div class="kpi-foot"><span class="good">↗</span> Completed successfully</div></div>
-          <div class="kpi"><div class="kpi-top"><span>DELAYED ORDERS</span><span class="kpi-icon coral">!</span></div><div class="kpi-num">{{summary().delayedOrders | number:'2.0'}}</div><div class="kpi-foot"><span class="warn">●</span> Needs attention</div></div>
-          <div class="kpi"><div class="kpi-top"><span>AVAILABLE DRIVERS</span><span class="kpi-icon blue">♙</span></div><div class="kpi-num">{{summary().availableDrivers | number:'2.0'}}</div><div class="kpi-foot">Out of {{drivers().length}} total drivers</div></div>
-        </section>
-      }
-
-      @if (currentTab() === 'Overview') {
-        <section class="mid-grid">
-          <div class="panel map-panel"><div class="panel-head"><div><h2>Live network map</h2><p>Driver positions · Passau region</p></div><span class="map-live"><span class="pulse"></span>{{isSimulating() ? 'LIVE' : 'PREVIEW'}}</span></div>
-            <div class="map-canvas">
-              <svg class="map-art" viewBox="0 0 760 375" preserveAspectRatio="xMidYMid slice" aria-label="Stylized demo map of delivery routes in Passau"><defs><pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#253446" stroke-width="0.65" opacity=".42"/></pattern><filter id="glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect width="760" height="375" fill="#121e2a"/><rect width="760" height="375" fill="url(#grid)"/><path d="M-60 245 C 90 154, 144 285, 263 218 S 420 180, 515 250 S 650 150, 820 186" fill="none" stroke="#24465a" stroke-width="42"/><path d="M-60 245 C 90 154, 144 285, 263 218 S 420 180, 515 250 S 650 150, 820 186" fill="none" stroke="#39647a" stroke-width="24"/><path d="M-10 70 L150 125 L280 70 L460 105 L720 45 M0 327 L175 291 L311 360 L460 297 L700 332 M96 -10 L153 130 L141 245 L225 390 M381 -15 L369 130 L470 264 L477 390 M610 -15 L585 112 L642 280 L711 395" stroke="#354455" stroke-width="10" fill="none"/><path d="M-10 70 L150 125 L280 70 L460 105 L720 45 M0 327 L175 291 L311 360 L460 297 L700 332 M96 -10 L153 130 L141 245 L225 390 M381 -15 L369 130 L470 264 L477 390 M610 -15 L585 112 L642 280 L711 395" stroke="#556373" stroke-width="1.6" fill="none" stroke-dasharray="2 7"/><g fill="#202e3a" stroke="#2e4050"><rect x="25" y="30" width="80" height="50" rx="3"/><rect x="260" y="124" width="65" height="65" rx="3"/><rect x="511" y="36" width="58" height="65" rx="3"/><rect x="677" y="220" width="60" height="65" rx="3"/><rect x="38" y="286" width="68" height="70" rx="3"/><rect x="290" y="270" width="75" height="40" rx="3"/></g><path d="M140 248 Q 227 183 286 241 T 470 208" stroke="#46d5bd" stroke-width="2.5" stroke-dasharray="7 8" fill="none" opacity=".92"/><path d="M476 205 Q 535 273 618 150" stroke="#e6b46c" stroke-width="2.5" stroke-dasharray="7 8" fill="none"/><g fill="#788a9f" font-size="11" font-family="sans-serif" letter-spacing="1.7"><text x="319" y="107">ALTSTADT</text><text x="85" y="176">HAIDENHOF</text><text x="547" y="306">INNSTADT</text><text x="565" y="63">GRUBWEG</text></g><g><circle cx="140" cy="248" r="19" fill="#43d9bf" opacity=".09"/><circle cx="140" cy="248" r="10" fill="#47d6bd" stroke="#b8fff2" stroke-width="2"/><circle cx="286" cy="241" r="19" fill="#43d9bf" opacity=".09"/><circle cx="286" cy="241" r="10" fill="#47d6bd" stroke="#b8fff2" stroke-width="2"/><circle cx="470" cy="208" r="19" fill="#43d9bf" opacity=".09"/><circle cx="470" cy="208" r="10" fill="#47d6bd" stroke="#b8fff2" stroke-width="2"/><circle cx="618" cy="150" r="19" fill="#e2ae68" opacity=".13"/><circle cx="618" cy="150" r="10" fill="#e2ae68" stroke="#ffdeb1" stroke-width="2"/><circle cx="402" cy="299" r="10" fill="#4a80d9" stroke="#c7d9ff" stroke-width="2"/><circle cx="203" cy="105" r="10" fill="#4a80d9" stroke="#c7d9ff" stroke-width="2"/></g><g transform="translate(370 162)"><rect width="112" height="28" rx="6" fill="#172b37" stroke="#3a716f"/><circle cx="13" cy="14" r="4" fill="#49d5bd"/><text x="25" y="18" font-size="11" fill="#ebffff" font-family="sans-serif">4 active routes</text></g></svg>
-              <div class="map-tools"><span>＋</span><span>−</span></div><div class="map-legend"><span><i class="dot teal-dot"></i> Active</span><span><i class="dot yellow-dot"></i> Delayed</span><span><i class="dot blue-dot"></i> Available</span></div>
-            </div>
-            <div class="map-footer"><span><span class="small-dot"></span> SIMULATION DATA · NOT LIVE GPS</span><span>48.5667° N, 13.4319° E</span></div>
-          </div>
-          <div class="panel activity-panel"><div class="panel-head"><div><h2>Activity stream</h2><p>Latest network events</p></div><button class="text-btn" (click)="setTab('Activity')">View all ↗</button></div><div class="activity-list">@for (event of activities().slice(0, 5); track event.id) {<div class="event"><div class="event-icon" [ngClass]="event.type">{{event.type === 'order_delivered' ? '✓' : event.type === 'order_delayed' ? '!' : event.type === 'driver_assigned' ? '↗' : '+'}}</div><div><strong>{{event.message}}</strong><small>{{event.timestamp | date:'HH:mm'}} · Network event</small></div></div>}</div><div class="activity-bottom"><span class="small-dot"></span> Event processing healthy</div></div>
-        </section>
-      }
-
-      @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
-      <section class="panel table-panel"><div class="panel-head table-heading"><div><h2>Delivery operations</h2><p>Manage incoming and active shipments</p></div><button class="small-outline" (click)="assignNextPending()">↗ Assign next pending</button></div><div class="table-controls"><div class="filters">@for (item of [{key:'ALL',label:'All orders'},{key:'IN_TRANSIT',label:'In transit'},{key:'PENDING',label:'Pending'},{key:'DELAYED',label:'Delayed'},{key:'DELIVERED',label:'Delivered'}]; track item.key) {<button [class.filter-active]="filter() === item.key" (click)="setFilter($any(item.key))">{{item.label}}</button>}</div><label class="search">⌕ <input type="search" placeholder="Search orders..." [ngModel]="query()" (ngModelChange)="query.set($event)" aria-label="Search orders"></label></div><div class="table-scroll"><table><thead><tr><th>ORDER ID</th><th>CUSTOMER</th><th>DESTINATION</th><th>STATUS</th><th>DRIVER</th><th>ETA</th><th></th></tr></thead><tbody>@for(order of visibleOrders(); track order.id) {<tr (click)="selectOrder(order.id)" [class.selected-row]="selectedOrderId() === order.id"><td><span class="order-id">{{order.id}}</span> @if(order.priority === 'HIGH'){<span class="priority">HIGH</span>}</td><td>{{order.customer}}</td><td class="muted-cell">{{order.destination}}</td><td><span class="status-chip" [ngClass]="order.status"><span>●</span> {{statusLabel(order.status)}}</span></td><td class="muted-cell">{{getDriverName(order.driverId)}}</td><td class="eta">{{order.status === 'DELIVERED' ? '—' : order.etaMinutes + ' min'}}</td><td class="arrow-cell">↗</td></tr>} @empty {<tr><td colspan="7" class="empty">No matching deliveries found.</td></tr>}</tbody></table></div><div class="table-footer"><span>Showing {{visibleOrders().length}} of {{orders().length}} orders</span><span>Demo data · Local state</span></div></section>
-      }
-      @if (currentTab() === 'Fleet') {<section class="panel generic-panel"><div class="panel-head"><div><h2>Fleet management</h2><p>Driver roster and vehicle availability</p></div></div><div class="fleet-grid">@for(driver of drivers();track driver.id){<div class="driver-card"><div class="driver-top"><span class="driver-avatar">{{driver.name.split(' ')[0][0]}}{{driver.name.split(' ')[1][0]}}</span><span class="driver-state" [class.available]="driver.status === 'AVAILABLE'">● {{driver.status}}</span></div><strong>{{driver.name}}</strong><small>{{driver.id}} · Passau region</small><div class="load"><span>Current load</span><strong>{{driver.load}} / {{driver.maxLoad}}</strong></div><div class="load-bar"><span [style.width.%]="driver.load/driver.maxLoad*100"></span></div></div>}</div></section>}
-      @if (currentTab() === 'Activity') {<section class="panel generic-panel"><div class="panel-head"><div><h2>Network activity</h2><p>Simulated event log</p></div></div><div class="activity-list full">@for(event of activities();track event.id){<div class="event"><div class="event-icon" [ngClass]="event.type">{{event.type === 'order_delivered' ? '✓' : event.type === 'order_delayed' ? '!' : event.type === 'driver_assigned' ? '↗' : '+'}}</div><div><strong>{{event.message}}</strong><small>{{event.timestamp | date:'medium'}} · {{event.type}}</small></div></div>}</div></section>}
-      <footer class="footer">FLOWOPS / OPERATIONS INTELLIGENCE <span>DEMO BUILD 0.1 · DESIGNED FOR REAL SYSTEMS</span></footer>
-    </main>
+<header class="app-header">
+  <a class="wordmark" href="/" aria-label="Sareevelo home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M26 7H12a6 6 0 0 0 0 12h8a3 3 0 0 1 0 6H6" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/></svg>Sareevelo</a>
+  <nav aria-label="Main navigation">
+    @for (tab of ['Overview', 'Deliveries', 'Fleet', 'Activity']; track tab) {
+      <button [class.active]="currentTab() === tab" [attr.aria-current]="currentTab() === tab ? 'page' : null" (click)="setTab(tab)">{{tab === 'Overview' ? 'Dispatch' : tab === 'Fleet' ? 'Drivers' : tab}}</button>
+    }
+  </nav>
+  <div class="depot"><span class="depot-symbol" aria-hidden="true">P</span><span>Passau depot<small>Orders workspace</small></span></div>
+</header>
+<main>
+  <div class="page-heading">
+    <div><h1>{{currentTab() === 'Overview' ? 'Dispatch board' : currentTab() === 'Fleet' ? 'Drivers' : currentTab() === 'Activity' ? 'Activity log' : 'Deliveries'}}</h1><p class="page-description">{{currentTab() === 'Overview' ? 'A clear view of every delivery, from depot to doorstep.' : currentTab() === 'Fleet' ? 'Your team, their availability and current loads.' : currentTab() === 'Activity' ? 'The latest changes across your delivery network.' : 'Find, review and assign your deliveries.'}}</p></div>
+    <button class="primary" (click)="openNewOrder()">+ New delivery</button>
   </div>
-</div>
-@if (selectedOrder(); as order) {<aside class="detail-strip" aria-label="Selected order"><div><span class="strip-eyebrow">SELECTED ORDER</span><strong>{{order.id}} · {{order.customer}}</strong><small>{{order.destination}} · {{statusLabel(order.status)}} · {{getDriverName(order.driverId)}}</small></div><button (click)="selectedOrderId.set(null)" aria-label="Close selected order">×</button></aside>}
-@if (showNewOrder()) {<div class="modal-backdrop" (click)="showNewOrder.set(false)"><div class="modal" (click)="$event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">NEW DELIVERY</span><h2>Create shipment</h2><p>Add a new order to the simulation.</p></div><button class="close" (click)="showNewOrder.set(false)">×</button></div><form (ngSubmit)="createOrder()"><label>Customer name<input required placeholder="e.g. Bavaria Electronics" [ngModel]="newCustomer()" (ngModelChange)="newCustomer.set($event)" name="customer"></label><label>Destination<input required placeholder="e.g. Passau · Altstadt" [ngModel]="newDestination()" (ngModelChange)="newDestination.set($event)" name="destination"></label><label>Priority<select [ngModel]="newPriority()" (ngModelChange)="newPriority.set($event)" name="priority"><option value="NORMAL">Normal</option><option value="HIGH">High</option></select></label><div class="modal-actions"><button type="button" class="ghost-btn" (click)="showNewOrder.set(false)">Cancel</button><button type="submit" class="primary-btn">Create delivery →</button></div></form></div></div>}
-@if(toast()){<div class="toast">✓ {{toast()}}</div>}
+  @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
+    @if (loadError()) {<div class="integration-notice error" role="alert">{{loadError()}} <button class="link" (click)="reloadOrders()">Retry</button></div>}
+    @else {<div class="integration-notice" role="status">{{loading() ? 'Loading saved deliveries…' : 'Showing saved deliveries. Driver assignments and ETAs are not available yet.'}} <button class="link" [disabled]="loading()" (click)="reloadOrders()">Refresh</button></div>}
+  }
+  @if (detailLoading()) {<div class="integration-notice" role="status">Loading delivery details… <button class="link" (click)="closeDetails()">Cancel</button></div>}
+  @if (detailError()) {<div class="integration-notice error" role="alert">{{detailError()}} <button class="link" (click)="retryDetails()">Retry details</button> <button class="link" (click)="closeDetails()">Close</button></div>}
+  @if (currentTab() === 'Overview' && !loading() && !loadError()) {
+    <section class="shipment-flow" aria-label="Shipment progress">
+      <div class="flow-heading"><h2>From depot to doorstep</h2><span>{{orders().length}} deliveries in this workspace</span></div>
+      <div class="flow-stages">
+        @for(stage of shipmentStages(); track stage.status) {
+          <div class="flow-stage" [class.stage-selected]="filter() === stage.status">
+            <button class="stage-heading" [attr.aria-pressed]="filter() === stage.status" (click)="selectStage(stage.status)"><span class="stage-node" aria-hidden="true"></span><span>{{stage.label}}</span><span class="stage-count">{{stage.orders.length}}</span></button>
+            <div class="stage-shipments">
+              @for(order of stage.orders.slice(0, 2); track order.id) {
+                <button class="shipment-label" [class.shipment-selected]="selectedOrderId() === order.id" (click)="selectOrder(order.id)"><span>{{order.customer}}</span><small>{{order.trackingNumber}}</small></button>
+              } @empty {<p class="stage-empty">{{stage.status === 'PENDING' ? 'No pending deliveries.' : stage.status === 'IN_TRANSIT' ? 'No deliveries on the road.' : 'Completed deliveries appear here.'}}</p>}
+              @if(stage.orders.length > 2){<button class="stage-more" (click)="selectStage(stage.status)">View all {{stage.orders.length}} deliveries</button>}
+            </div>
+          </div>
+        }
+      </div>
+      @if(summary().delayedOrders > 0){<div class="flow-exception"><span class="exception-symbol" aria-hidden="true">!</span><span>{{summary().delayedOrders}} {{summary().delayedOrders === 1 ? 'delivery needs' : 'deliveries need'}} a closer look</span><button (click)="selectStage('DELAYED')">Review delayed deliveries</button></div>}
+    </section>
+  }
+  @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
+    <div class="dispatch-layout" [class.full-width]="currentTab() === 'Deliveries'">
+      <section class="queue" aria-label="Delivery queue">
+        <div class="queue-summary"><div><h2>Delivery manifest</h2><span>{{orders().length}} deliveries</span></div><button class="secondary" disabled title="Driver assignment is not available from the backend yet">Assignment unavailable</button></div>
+        <div class="queue-toolbar">
+          <div class="filters" aria-label="Filter deliveries">
+            @for (item of filters; track item.key) {
+              <button [class.selected]="filter() === item.key" [attr.aria-pressed]="filter() === item.key" (click)="setFilter(item.key)">{{item.label}}</button>
+            }
+          </div>
+          <input class="search" type="search" placeholder="Find a delivery…" [ngModel]="query()" (ngModelChange)="query.set($event)" aria-label="Find a delivery">
+        </div>
+        <div class="table-scroll">
+          <table class="delivery-table"><thead><tr><th scope="col">Delivery / customer</th><th scope="col">Destination</th><th scope="col">Driver</th><th scope="col">Status</th><th scope="col" class="align-right">ETA</th></tr></thead>
+          <tbody>@if (loading()) {<tr><td colspan="5" class="empty" role="status">Loading deliveries…</td></tr>} @else if (loadError()) {<tr><td colspan="5" class="empty">Deliveries could not be loaded.</td></tr>} @else { @for(order of visibleOrders(); track order.id) {
+            <tr [class.selected-row]="selectedOrderId() === order.id" [class.delayed-row]="order.status === 'DELAYED'" (click)="selectOrder(order.id)">
+              <td><button class="order-link" (click)="selectOrder(order.id); $event.stopPropagation()">{{order.trackingNumber}}</button><span class="customer">{{order.customer}}</span></td>
+              <td class="destination-cell">{{order.destination}}</td>
+              <td class="unassigned" title="Driver information is not returned by the order API">Not available</td>
+              <td><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span></td>
+              <td class="align-right eta">—</td>
+            </tr>
+          } @empty {<tr><td colspan="5" class="empty">{{orders().length ? 'No deliveries match this view.' : 'No deliveries yet. Create your first delivery to get started.'}} <button class="link" (click)="query.set(''); setFilter('ALL')">Clear filters</button></td></tr>} }</tbody></table>
+        </div>
+        <div class="queue-footer"><span>{{visibleOrders().length}} of {{orders().length}} deliveries</span><span>Select a delivery to view details</span></div>
+
+      </section>
+      @if (currentTab() === 'Overview' && !loading() && !loadError()) {
+        <aside class="workbench" aria-label="Dispatch details">
+          @if (selectedOrder(); as order) {
+            <div class="section-heading"><h2>Delivery details</h2><button class="link" (click)="closeDetails()">Close</button></div>
+            <div class="order-detail"><span class="reference">{{order.trackingNumber}}</span><h3>{{order.customer}}</h3><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span><dl><dt>Destination</dt><dd>{{order.destination}}</dd><dt>Pickup address</dt><dd>{{order.pickupAddress}}</dd><dt>Database ID</dt><dd>{{order.id}}</dd><dt>Driver and ETA</dt><dd>Not provided by the order service</dd></dl></div>
+          } @else {
+            <div class="section-heading"><h2>Needs attention</h2><span class="count">{{attentionOrders().length}}</span></div>
+            @for(order of attentionOrders(); track order.id) {
+              <button class="attention-item" (click)="selectOrder(order.id)"><span class="attention-top"><span class="reference">{{order.trackingNumber}}</span><span [class.warning]="order.status === 'DELAYED'">{{order.status === 'DELAYED' ? 'Delayed' : 'Pending'}}</span></span><strong>{{order.customer}}</strong><span class="attention-bottom">{{order.destination}}</span></button>
+            } @empty {<p class="quiet">No deliveries need attention.</p>}
+          }
+          <div class="section-heading drivers-heading"><h2>Demo driver availability</h2><button class="link" (click)="setTab('Fleet')">All drivers</button></div>
+          @for(driver of availableDrivers(); track driver.id) {<div class="ready-driver"><span class="driver-initials" aria-hidden="true">{{driver.name.split(' ')[0][0]}}{{driver.name.split(' ')[1][0]}}</span><div><strong>{{driver.name}}</strong><small>{{driver.id}} / {{driver.maxLoad - driver.load}} spaces available</small></div><span class="availability-dot" aria-label="Available"></span></div>} @empty {<p class="quiet">All drivers are on a run.</p>}
+        </aside>
+      }
+    </div>
+  }
+  @if (currentTab() === 'Fleet') {
+    <p class="integration-notice">Demo roster. Driver management is not connected to the backend.</p>
+    <div class="section-heading"><h2>{{drivers().length}} drivers <span class="quiet">/ {{summary().availableDrivers}} available</span></h2></div>
+    <div class="table-scroll"><table><thead><tr><th>Driver</th><th>Reference</th><th>Availability</th><th>Current load</th></tr></thead><tbody>@for(driver of drivers(); track driver.id){<tr><td><strong>{{driver.name}}</strong></td><td class="reference">{{driver.id}}</td><td>{{driver.status === 'AVAILABLE' ? 'Available' : 'On a run'}}</td><td><div class="load-meter"><span [style.width.%]="driver.load / driver.maxLoad * 100"></span></div>{{driver.load}} / {{driver.maxLoad}}</td></tr>}</tbody></table></div>
+  }
+  @if (currentTab() === 'Activity') {<p class="integration-notice">Demo activity only. These events are unrelated to your saved deliveries.</p><section class="activity-log" aria-label="Activity log">@for(event of activities(); track event.id){<div class="log-row"><time>{{event.timestamp | date:'HH:mm'}}</time><span>{{event.message}}</span><small>{{event.timestamp | date:'d MMM yyyy'}}</small></div>}</section>}
+  <footer><span>Orders are saved by the backend. Driver and activity views are demos.</span><span>Simulation disabled for real orders</span></footer>
+</main>
+@if (currentTab() !== 'Overview' ? selectedOrder() : null; as order) {<aside class="selection-bar" aria-label="Selected delivery"><div><strong>{{order.trackingNumber}} / {{order.customer}}</strong><span>{{order.destination}} / {{statusLabel(order.status)}} / {{order.pickupAddress}}</span></div><button class="link" (click)="closeDetails()">Close</button></aside>}
+@if (showNewOrder()) {
+  <div class="modal-backdrop" (click)="closeNewOrder()"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="new-delivery-title" (click)="$event.stopPropagation()" (keydown.escape)="closeNewOrder()">
+    <div class="section-heading"><h2 id="new-delivery-title">New delivery</h2><button class="link" (click)="closeNewOrder()">Close</button></div>
+        <form (ngSubmit)="createOrder()" #orderForm="ngForm" [attr.aria-busy]="saving()">
+      <label>Tracking number<input required maxlength="50" placeholder="SAR-1001" [ngModel]="newTrackingNumber()" (ngModelChange)="newTrackingNumber.set($event)" name="trackingNumber" [disabled]="saving()"></label>
+      <label>Customer<input required maxlength="150" placeholder="Company or customer name" [ngModel]="newCustomer()" (ngModelChange)="newCustomer.set($event)" name="customer" [disabled]="saving()"></label>
+      <label>Pickup address<input required maxlength="255" placeholder="Passau, Germany" [ngModel]="newPickupAddress()" (ngModelChange)="newPickupAddress.set($event)" name="pickupAddress" [disabled]="saving()"></label>
+      <label>Delivery address<input required maxlength="255" placeholder="Munich, Germany" [ngModel]="newDestination()" (ngModelChange)="newDestination.set($event)" name="destination" [disabled]="saving()"></label>
+      @if (createError()) {<p class="form-error" role="alert">{{createError()}}</p>}
+      <p class="quiet">The delivery will be saved with Pending status.</p>
+      <div class="modal-actions"><button class="secondary" type="button" [disabled]="saving()" (click)="closeNewOrder()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || orderForm.invalid">{{saving() ? 'Saving…' : 'Create delivery'}}</button></div>
+    </form>
+  </section></div>
+}
+@if(toast()){<div class="toast" role="status">{{toast()}}</div>}

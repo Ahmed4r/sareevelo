@@ -1,8 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, OnDestroy, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { INITIAL_ACTIVITY, INITIAL_DRIVERS, INITIAL_ORDERS } from './mock-data';
-import { ActivityEvent, Driver, Order, OrderStatus } from './models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
+import { INITIAL_ACTIVITY, INITIAL_DRIVERS } from './mock-data';
+import { OrderStatus } from './models';
+import { OrdersStore } from './orders/orders.store';
+import { orderErrorMessage } from './orders/order-errors';
+
+type OrderFilter = 'ALL' | OrderStatus;
 
 @Component({
   selector: 'app-root',
@@ -12,116 +18,109 @@ import { ActivityEvent, Driver, Order, OrderStatus } from './models';
   styleUrl: './app.component.css'
 })
 export class AppComponent implements OnDestroy {
-  readonly orders = signal<Order[]>(structuredClone(INITIAL_ORDERS));
-  readonly drivers = signal<Driver[]>(structuredClone(INITIAL_DRIVERS));
-  readonly activities = signal<ActivityEvent[]>(structuredClone(INITIAL_ACTIVITY));
+  private readonly store = inject(OrdersStore);
+  private readonly destroyRef = inject(DestroyRef);
+  readonly orders = this.store.orders.asReadonly();
+  readonly loading = this.store.loading.asReadonly();
+  readonly loadError = this.store.error.asReadonly();
+  readonly selectedOrder = this.store.selected.asReadonly();
+  readonly selectedOrderId = this.store.selectedId.asReadonly();
+  readonly detailLoading = this.store.detailLoading.asReadonly();
+  readonly detailError = this.store.detailError.asReadonly();
+  // These fixtures are display-only and never participate in real order mutations.
+  readonly drivers = signal(structuredClone(INITIAL_DRIVERS)).asReadonly();
+  readonly activities = signal(structuredClone(INITIAL_ACTIVITY)).asReadonly();
   readonly currentTab = signal('Overview');
-  readonly filter = signal<'ALL' | OrderStatus>('ALL');
+  readonly filter = signal<OrderFilter>('ALL');
   readonly query = signal('');
-  readonly selectedOrderId = signal<string | null>('FL-20481');
-  readonly isSimulating = signal(false);
   readonly showNewOrder = signal(false);
+  readonly saving = signal(false);
+  readonly createError = signal('');
   readonly toast = signal('');
+  readonly newTrackingNumber = signal('');
   readonly newCustomer = signal('');
+  readonly newPickupAddress = signal('');
   readonly newDestination = signal('');
-  readonly newPriority = signal<'NORMAL' | 'HIGH'>('NORMAL');
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
-  private orderCounter = 20487;
-  private tickCount = 0;
-
-  readonly summary = computed(() => {
-    const orders = this.orders();
-    const drivers = this.drivers();
-    return {
-      activeDeliveries: orders.filter(o => o.status === 'IN_TRANSIT').length,
-      deliveredToday: orders.filter(o => o.status === 'DELIVERED').length,
-      delayedOrders: orders.filter(o => o.status === 'DELAYED').length,
-      availableDrivers: drivers.filter(d => d.status === 'AVAILABLE').length,
-      onTimeRate: orders.length ? Math.round(orders.filter(o => o.status !== 'DELAYED').length / orders.length * 100) : 100
-    };
-  });
-  readonly visibleOrders = computed(() => this.orders().filter(o => {
-    const byStatus = this.filter() === 'ALL' || o.status === this.filter();
-    const q = this.query().toLowerCase().trim();
-    return byStatus && (!q || [o.id, o.customer, o.destination].some(value => value.toLowerCase().includes(q)));
-  }));
-  readonly selectedOrder = computed(() => this.orders().find(o => o.id === this.selectedOrderId()) ?? null);
-  readonly inTransit = computed(() => this.orders().filter(o => o.status === 'IN_TRANSIT'));
-  readonly routePoints = [
-    {x: 105,y: 175},{x: 175,y: 285},{x: 283,y: 240},{x: 377,y: 145},{x: 490,y: 206},{x: 625,y: 120}
+  readonly filters: ReadonlyArray<{ key: OrderFilter; label: string }> = [
+    { key: 'ALL', label: 'All' }, { key: 'PENDING', label: 'Pending' },
+    { key: 'IN_TRANSIT', label: 'On the road' }, { key: 'DELAYED', label: 'Delayed' },
+    { key: 'DELIVERED', label: 'Delivered' }
   ];
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
+  readonly summary = computed(() => ({
+    delayedOrders: this.orders().filter(order => order.status === 'DELAYED').length,
+    availableDrivers: this.drivers().filter(driver => driver.status === 'AVAILABLE').length
+  }));
+  readonly visibleOrders = computed(() => this.orders().filter(order => {
+    const q = this.query().toLowerCase().trim();
+    return (this.filter() === 'ALL' || order.status === this.filter()) &&
+      (!q || [String(order.id), order.trackingNumber, order.customer, order.destination, order.pickupAddress]
+        .some(value => value.toLowerCase().includes(q)));
+  }));
+  readonly attentionOrders = computed(() => this.orders()
+    .filter(order => order.status === 'DELAYED' || order.status === 'PENDING')
+    .sort((a, b) => Number(b.status === 'DELAYED') - Number(a.status === 'DELAYED')));
+  readonly availableDrivers = computed(() => this.drivers().filter(driver => driver.status === 'AVAILABLE'));
+  readonly shipmentStages = computed(() => [
+    { status: 'PENDING' as OrderStatus, label: 'Pending dispatch', orders: this.orders().filter(order => order.status === 'PENDING') },
+    { status: 'IN_TRANSIT' as OrderStatus, label: 'On the road', orders: this.orders().filter(order => order.status === 'IN_TRANSIT') },
+    { status: 'DELIVERED' as OrderStatus, label: 'Delivered', orders: this.orders().filter(order => order.status === 'DELIVERED') }
+  ]);
+
+  constructor() { this.store.load(); }
+
+  reloadOrders(): void { this.store.load(); }
   setTab(tab: string): void {
-    if (tab === 'Settings') { this.notify('Settings are coming in a future release.'); return; }
     this.currentTab.set(tab);
     if (tab === 'Deliveries') this.filter.set('ALL');
   }
-  setFilter(filter: 'ALL' | OrderStatus): void { this.filter.set(filter); }
-  selectOrder(id: string): void { this.selectedOrderId.set(id); }
-  toggleSimulation(): void {
-    if (this.isSimulating()) { this.stopSimulation(); this.notify('Simulation paused'); return; }
-    this.isSimulating.set(true);
-    this.notify('Live simulation running');
-    this.tickTimer = setInterval(() => this.tick(), 2200);
+  setFilter(filter: OrderFilter): void { this.filter.set(filter); }
+  selectStage(status: OrderStatus): void { this.query.set(''); this.filter.set(status); }
+  selectOrder(id: number): void { this.store.select(id); }
+  closeDetails(): void { this.store.closeDetails(); }
+  retryDetails(): void {
+    const id = this.selectedOrderId();
+    if (id !== null) this.store.select(id);
   }
-  stopSimulation(): void {
-    this.isSimulating.set(false);
-    if (this.tickTimer) clearInterval(this.tickTimer);
-    this.tickTimer = null;
-  }
-  private tick(): void {
-    this.tickCount++;
-    this.orders.update(orders => orders.map(o => {
-      if (o.status !== 'IN_TRANSIT') return o;
-      const eta = Math.max(0, o.etaMinutes - 3);
-      if (eta === 0) {
-        this.addActivity('order_delivered', `${o.id} successfully delivered`);
-        return {...o, etaMinutes: 0, status: 'DELIVERED'};
-      }
-      return {...o, etaMinutes: eta};
-    }));
-    this.drivers.update(ds => ds.map((d, i) => {
-      if (d.status !== 'BUSY') return d;
-      return {...d, lat: d.lat + Math.sin(this.tickCount + i) * 0.0011, lng: d.lng + Math.cos(this.tickCount + i) * 0.0018};
-    }));
-    if (this.tickCount % 3 === 0) this.assignNextPending();
-  }
-  assignNextPending(): void {
-    const pending = this.orders().find(o => o.status === 'PENDING');
-    const driver = this.drivers().find(d => d.status === 'AVAILABLE');
-    if (!pending || !driver) { this.notify('No pending order or available driver'); return; }
-    this.orders.update(orders => orders.map(o => o.id === pending.id ? {...o, status:'IN_TRANSIT',driverId:driver.id} : o));
-    this.drivers.update(drivers => drivers.map(d => d.id === driver.id ? {...d,status:'BUSY',load:1} : d));
-    this.addActivity('driver_assigned', `${driver.name} assigned to ${pending.id}`);
-    this.notify(`${pending.id} assigned to ${driver.name}`);
-  }
+  openNewOrder(): void { this.createError.set(''); this.showNewOrder.set(true); }
+  closeNewOrder(): void { if (!this.saving()) this.showNewOrder.set(false); }
+
   createOrder(): void {
-    if (!this.newCustomer().trim() || !this.newDestination().trim()) { this.notify('Enter customer and destination'); return; }
-    const order: Order = {
-      id: `FL-${++this.orderCounter}`,customer:this.newCustomer().trim(),destination:this.newDestination().trim(),
-      priority:this.newPriority(), status:'PENDING',etaMinutes:25 + Math.floor(Math.random()*30),driverId:null,createdAt:new Date().toISOString()
+    if (this.saving()) return;
+    const request = {
+      trackingNumber: this.newTrackingNumber().trim(), customerName: this.newCustomer().trim(),
+      pickupAddress: this.newPickupAddress().trim(), deliveryAddress: this.newDestination().trim()
     };
-    this.orders.update(orders => [order, ...orders]);
-    this.addActivity('order_created', `New order ${order.id} received`);
-    this.selectedOrderId.set(order.id);
-    this.newCustomer.set(''); this.newDestination.set(''); this.newPriority.set('NORMAL'); this.showNewOrder.set(false);
-    this.notify(`${order.id} created successfully`);
+    if (Object.values(request).some(value => !value)) {
+      this.createError.set('Enter a tracking number, customer, pickup address and delivery address.');
+      return;
+    }
+    this.saving.set(true);
+    this.createError.set('');
+    this.store.create(request).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.saving.set(false))
+    ).subscribe({
+      next: order => {
+        this.filter.set('ALL'); this.query.set('');
+        this.currentTab.set('Deliveries');
+        this.newTrackingNumber.set(''); this.newCustomer.set('');
+        this.newPickupAddress.set(''); this.newDestination.set('');
+        this.showNewOrder.set(false);
+        this.notify(`Delivery ${order.trackingNumber} created`);
+      },
+      error: (error: unknown) => this.createError.set(orderErrorMessage(error))
+    });
   }
-  private addActivity(type: ActivityEvent['type'], message: string): void {
-    this.activities.update(list => [{id:`EV-${Date.now()}-${Math.random()}`,type,message,timestamp:new Date().toISOString()},...list].slice(0,8));
-  }
+
   private notify(message: string): void {
     this.toast.set(message);
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => this.toast.set(''), 3200);
+    this.toastTimer = setTimeout(() => this.toast.set(''), 4000);
   }
   statusLabel(status: OrderStatus): string {
-    return ({PENDING:'Pending',IN_TRANSIT:'In transit',DELIVERED:'Delivered',DELAYED:'Delayed'} as const)[status];
+    return ({ PENDING: 'Pending', IN_TRANSIT: 'In transit', DELIVERED: 'Delivered', DELAYED: 'Delayed' } as const)[status];
   }
-  getDriverName(id: string | null): string {
-    return this.drivers().find(d => d.id === id)?.name ?? 'Unassigned';
-  }
-  trackById(_index: number, item: {id: string}): string { return item.id; }
-  ngOnDestroy(): void { this.stopSimulation(); if (this.toastTimer) clearTimeout(this.toastTimer); }
+  ngOnDestroy(): void { if (this.toastTimer) clearTimeout(this.toastTimer); }
 }

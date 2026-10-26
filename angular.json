@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "flowops-frontend": {
+    "sareevelo-frontend": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -13,7 +13,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
-            "outputPath": "dist/flowops-frontend",
+            "outputPath": "dist/sareevelo-frontend",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
@@ -51,12 +51,13 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": { "proxyConfig": "proxy.conf.json" },
           "configurations": {
             "production": {
-              "buildTarget": "flowops-frontend:build:production"
+              "buildTarget": "sareevelo-frontend:build:production"
             },
             "development": {
-              "buildTarget": "flowops-frontend:build:development"
+              "buildTarget": "sareevelo-frontend:build:development"
             }
           },
           "defaultConfiguration": "development"
