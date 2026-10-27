@@ -1,7 +1,8 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { CreateOrderRequest, OrderResponse } from './order-api.models';
+import { CreateOrderRequest, OrderResponse, UpdateOrderStatusRequest, OrderActivity } from './order-api.models';
+import { AssignDriverRequest } from '../drivers/driver-api.models';
 
 @Injectable({ providedIn: 'root' })
 export class OrderApiService {
@@ -18,5 +19,17 @@ export class OrderApiService {
 
   createOrder(request: CreateOrderRequest): Observable<OrderResponse> {
     return this.http.post<OrderResponse>(this.url, request);
+  }
+
+  assignDriver(id: number, request: AssignDriverRequest): Observable<OrderResponse> {
+    return this.http.post<OrderResponse>(`${this.url}/${id}/assign`, request);
+  }
+
+  updateStatus(id: number, request: UpdateOrderStatusRequest): Observable<OrderResponse> {
+    return this.http.patch<OrderResponse>(`${this.url}/${id}/status`, request);
+  }
+
+  getActivity(id: number): Observable<OrderActivity[]> {
+    return this.http.get<OrderActivity[]>(`${this.url}/${id}/activity`);
   }
 }

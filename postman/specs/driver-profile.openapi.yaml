@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: SAREEVELO Driver Profiles
+  version: 1.1.0
+  description: Driver profile extension. Existing assignment and order APIs are unchanged. This contract covers driver endpoints only.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/drivers:
+    get:
+      operationId: listDrivers
+      responses:
+        '200':
+          description: Current roster, including nullable contact fields on legacy records.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Driver' } }
+    post:
+      operationId: createDriver
+      description: Creates an available driver. Mobile is now required for new drivers. Employee code must be unique. Do not automatically retry an uncertain response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDriver' }
+      responses:
+        '201': { $ref: '#/components/responses/Driver' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '409': { description: Employee code already exists. }
+  /api/v1/drivers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DriverId'
+    get:
+      operationId: getDriver
+      responses:
+        '200': { $ref: '#/components/responses/Driver' }
+        '404': { description: Driver does not exist. }
+  /api/v1/drivers/{id}/profile:
+    parameters:
+      - $ref: '#/components/parameters/DriverId'
+    put:
+      operationId: replaceDriverProfile
+      description: Replaces name and optional contact/vehicle/notes fields. Missing, blank or null optional values clear the field. Mobile may remain absent for legacy records. Does not change employee code, capacity, available spaces or status. Uses the same driver lock as assignment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Profile' }
+      responses:
+        '200': { $ref: '#/components/responses/Driver' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '404': { description: Driver does not exist. }
+components:
+  parameters:
+    DriverId:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    Driver:
+      description: Persisted driver record.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Driver' }
+    Invalid:
+      description: Invalid field values; no profile changes are saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string }
+              message: { type: string }
+              fieldErrors: { type: object, additionalProperties: { type: string } }
+  schemas:
+    Profile:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        mobileNumber:
+          type: string
+          nullable: true
+          description: Stored as 7–15 digits with an optional leading plus. Input spaces, parentheses, dots and hyphens are removed before validation. This is format validation, not phone ownership verification.
+          example: '+4915123456789'
+        email: { type: string, format: email, maxLength: 254, nullable: true }
+        vehicleType: { type: string, enum: [BICYCLE, MOTORCYCLE, CAR, VAN, TRUCK, OTHER], nullable: true }
+        vehicleRegistration: { type: string, maxLength: 32, nullable: true }
+        notes: { type: string, maxLength: 1000, nullable: true }
+    CreateDriver:
+      allOf:
+        - $ref: '#/components/schemas/Profile'
+        - type: object
+          required: [employeeCode, capacity, mobileNumber]
+          properties:
+            employeeCode: { type: string, minLength: 1, maxLength: 50 }
+            capacity: { type: integer, minimum: 1, maximum: 2147483647 }
+            mobileNumber: { type: string, nullable: false, minLength: 7 }
+    Driver:
+      allOf:
+        - $ref: '#/components/schemas/Profile'
+        - type: object
+          required: [id, employeeCode, status, capacity, availableSpaces]
+          properties:
+            id: { type: integer, format: int64 }
+            employeeCode: { type: string }
+            status: { type: string, enum: [AVAILABLE, ON_DELIVERY, OFFLINE] }
+            capacity: { type: integer }
+            availableSpaces: { type: integer }

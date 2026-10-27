@@ -1,5 +1,14 @@
 import { OrderStatus } from '../models';
 
+export interface UpdateOrderStatusRequest { status: OrderStatus; }
+export interface OrderActivity {
+  id: number;
+  orderId: number;
+  type: 'ORDER_CREATED' | 'DRIVER_ASSIGNED' | 'DELIVERY_STARTED' | 'DELIVERY_DELAYED' | 'DELIVERY_RESUMED' | 'DELIVERY_COMPLETED';
+  message: string;
+  timestamp: string;
+}
+
 /** Exact public DTO returned by the Spring OrderController. */
 export interface OrderResponse {
   id: number;
@@ -8,10 +17,10 @@ export interface OrderResponse {
   pickupAddress: string;
   deliveryAddress: string;
   status: OrderStatus;
+  driverId: number | null;
 }
 
 export interface CreateOrderRequest {
-  trackingNumber: string;
   customerName: string;
   pickupAddress: string;
   deliveryAddress: string;
@@ -25,6 +34,7 @@ export interface OrderView {
   pickupAddress: string;
   destination: string;
   status: OrderStatus;
+  driverId: number | null;
 }
 
 export function toOrderView(order: OrderResponse): OrderView {
@@ -34,6 +44,7 @@ export function toOrderView(order: OrderResponse): OrderView {
     customer: order.customerName,
     pickupAddress: order.pickupAddress,
     destination: order.deliveryAddress,
-    status: order.status
+    status: order.status,
+    driverId: order.driverId
   };
 }

@@ -1,107 +1,175 @@
-<header class="app-header">
-  <a class="wordmark" href="/" aria-label="Sareevelo home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M26 7H12a6 6 0 0 0 0 12h8a3 3 0 0 1 0 6H6" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/></svg>Sareevelo</a>
-  <nav aria-label="Main navigation">
-    @for (tab of ['Overview', 'Deliveries', 'Fleet', 'Activity']; track tab) {
-      <button [class.active]="currentTab() === tab" [attr.aria-current]="currentTab() === tab ? 'page' : null" (click)="setTab(tab)">{{tab === 'Overview' ? 'Dispatch' : tab === 'Fleet' ? 'Drivers' : tab}}</button>
-    }
-  </nav>
-  <div class="depot"><span class="depot-symbol" aria-hidden="true">P</span><span>Passau depot<small>Orders workspace</small></span></div>
-</header>
-<main>
-  <div class="page-heading">
-    <div><h1>{{currentTab() === 'Overview' ? 'Dispatch board' : currentTab() === 'Fleet' ? 'Drivers' : currentTab() === 'Activity' ? 'Activity log' : 'Deliveries'}}</h1><p class="page-description">{{currentTab() === 'Overview' ? 'A clear view of every delivery, from depot to doorstep.' : currentTab() === 'Fleet' ? 'Your team, their availability and current loads.' : currentTab() === 'Activity' ? 'The latest changes across your delivery network.' : 'Find, review and assign your deliveries.'}}</p></div>
-    <button class="primary" (click)="openNewOrder()">+ New delivery</button>
-  </div>
-  @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
-    @if (loadError()) {<div class="integration-notice error" role="alert">{{loadError()}} <button class="link" (click)="reloadOrders()">Retry</button></div>}
-    @else {<div class="integration-notice" role="status">{{loading() ? 'Loading saved deliveries…' : 'Showing saved deliveries. Driver assignments and ETAs are not available yet.'}} <button class="link" [disabled]="loading()" (click)="reloadOrders()">Refresh</button></div>}
-  }
-  @if (detailLoading()) {<div class="integration-notice" role="status">Loading delivery details… <button class="link" (click)="closeDetails()">Cancel</button></div>}
-  @if (detailError()) {<div class="integration-notice error" role="alert">{{detailError()}} <button class="link" (click)="retryDetails()">Retry details</button> <button class="link" (click)="closeDetails()">Close</button></div>}
-  @if (currentTab() === 'Overview' && !loading() && !loadError()) {
-    <section class="shipment-flow" aria-label="Shipment progress">
-      <div class="flow-heading"><h2>From depot to doorstep</h2><span>{{orders().length}} deliveries in this workspace</span></div>
-      <div class="flow-stages">
-        @for(stage of shipmentStages(); track stage.status) {
-          <div class="flow-stage" [class.stage-selected]="filter() === stage.status">
-            <button class="stage-heading" [attr.aria-pressed]="filter() === stage.status" (click)="selectStage(stage.status)"><span class="stage-node" aria-hidden="true"></span><span>{{stage.label}}</span><span class="stage-count">{{stage.orders.length}}</span></button>
-            <div class="stage-shipments">
-              @for(order of stage.orders.slice(0, 2); track order.id) {
-                <button class="shipment-label" [class.shipment-selected]="selectedOrderId() === order.id" (click)="selectOrder(order.id)"><span>{{order.customer}}</span><small>{{order.trackingNumber}}</small></button>
-              } @empty {<p class="stage-empty">{{stage.status === 'PENDING' ? 'No pending deliveries.' : stage.status === 'IN_TRANSIT' ? 'No deliveries on the road.' : 'Completed deliveries appear here.'}}</p>}
-              @if(stage.orders.length > 2){<button class="stage-more" (click)="selectStage(stage.status)">View all {{stage.orders.length}} deliveries</button>}
-            </div>
-          </div>
-        }
-      </div>
-      @if(summary().delayedOrders > 0){<div class="flow-exception"><span class="exception-symbol" aria-hidden="true">!</span><span>{{summary().delayedOrders}} {{summary().delayedOrders === 1 ? 'delivery needs' : 'deliveries need'}} a closer look</span><button (click)="selectStage('DELAYED')">Review delayed deliveries</button></div>}
-    </section>
-  }
-  @if (currentTab() === 'Overview' || currentTab() === 'Deliveries') {
-    <div class="dispatch-layout" [class.full-width]="currentTab() === 'Deliveries'">
-      <section class="queue" aria-label="Delivery queue">
-        <div class="queue-summary"><div><h2>Delivery manifest</h2><span>{{orders().length}} deliveries</span></div><button class="secondary" disabled title="Driver assignment is not available from the backend yet">Assignment unavailable</button></div>
-        <div class="queue-toolbar">
-          <div class="filters" aria-label="Filter deliveries">
-            @for (item of filters; track item.key) {
-              <button [class.selected]="filter() === item.key" [attr.aria-pressed]="filter() === item.key" (click)="setFilter(item.key)">{{item.label}}</button>
-            }
-          </div>
-          <input class="search" type="search" placeholder="Find a delivery…" [ngModel]="query()" (ngModelChange)="query.set($event)" aria-label="Find a delivery">
-        </div>
-        <div class="table-scroll">
-          <table class="delivery-table"><thead><tr><th scope="col">Delivery / customer</th><th scope="col">Destination</th><th scope="col">Driver</th><th scope="col">Status</th><th scope="col" class="align-right">ETA</th></tr></thead>
-          <tbody>@if (loading()) {<tr><td colspan="5" class="empty" role="status">Loading deliveries…</td></tr>} @else if (loadError()) {<tr><td colspan="5" class="empty">Deliveries could not be loaded.</td></tr>} @else { @for(order of visibleOrders(); track order.id) {
-            <tr [class.selected-row]="selectedOrderId() === order.id" [class.delayed-row]="order.status === 'DELAYED'" (click)="selectOrder(order.id)">
-              <td><button class="order-link" (click)="selectOrder(order.id); $event.stopPropagation()">{{order.trackingNumber}}</button><span class="customer">{{order.customer}}</span></td>
-              <td class="destination-cell">{{order.destination}}</td>
-              <td class="unassigned" title="Driver information is not returned by the order API">Not available</td>
-              <td><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span></td>
-              <td class="align-right eta">—</td>
-            </tr>
-          } @empty {<tr><td colspan="5" class="empty">{{orders().length ? 'No deliveries match this view.' : 'No deliveries yet. Create your first delivery to get started.'}} <button class="link" (click)="query.set(''); setFilter('ALL')">Clear filters</button></td></tr>} }</tbody></table>
-        </div>
-        <div class="queue-footer"><span>{{visibleOrders().length}} of {{orders().length}} deliveries</span><span>Select a delivery to view details</span></div>
+<a class="skip-link" href="#workspace">Skip to workspace</a>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <a class="brand" href="/" aria-label="Sareevelo home"><span class="brand-emblem" aria-hidden="true">↗</span>SAREEVELO<span class="brand-period" aria-hidden="true">●</span></a>
+    <div class="workspace-name"><span class="workspace-avatar">S</span><div>Logistics workspace<small>Operations</small></div></div>
+    <nav aria-label="Main navigation">
+      <button [class.active]="currentTab() === 'Overview'" [attr.aria-current]="currentTab() === 'Overview' ? 'page' : null" (click)="setTab('Overview')"><app-icon name="dispatch"/>Dispatch</button>
+      <button [class.active]="currentTab() === 'Deliveries'" [attr.aria-current]="currentTab() === 'Deliveries' ? 'page' : null" (click)="setTab('Deliveries')"><app-icon name="orders"/>Orders@if(!loading() && !loadError()){<span class="nav-count">{{orders().length}}</span>}</button>
+      <button [class.active]="currentTab() === 'Fleet'" [attr.aria-current]="currentTab() === 'Fleet' ? 'page' : null" (click)="setTab('Fleet')"><app-icon name="drivers"/>Drivers@if(!driversLoading() && !driversError()){<span class="nav-count">{{drivers().length}}</span>}</button>
+    </nav>
+    <div class="sidebar-bottom"><app-icon name="orders"/><span>Every delivery,<br><strong>in the right hands.</strong></span></div>
+  </aside>
 
-      </section>
-      @if (currentTab() === 'Overview' && !loading() && !loadError()) {
-        <aside class="workbench" aria-label="Dispatch details">
-          @if (selectedOrder(); as order) {
-            <div class="section-heading"><h2>Delivery details</h2><button class="link" (click)="closeDetails()">Close</button></div>
-            <div class="order-detail"><span class="reference">{{order.trackingNumber}}</span><h3>{{order.customer}}</h3><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span><dl><dt>Destination</dt><dd>{{order.destination}}</dd><dt>Pickup address</dt><dd>{{order.pickupAddress}}</dd><dt>Database ID</dt><dd>{{order.id}}</dd><dt>Driver and ETA</dt><dd>Not provided by the order service</dd></dl></div>
-          } @else {
-            <div class="section-heading"><h2>Needs attention</h2><span class="count">{{attentionOrders().length}}</span></div>
-            @for(order of attentionOrders(); track order.id) {
-              <button class="attention-item" (click)="selectOrder(order.id)"><span class="attention-top"><span class="reference">{{order.trackingNumber}}</span><span [class.warning]="order.status === 'DELAYED'">{{order.status === 'DELAYED' ? 'Delayed' : 'Pending'}}</span></span><strong>{{order.customer}}</strong><span class="attention-bottom">{{order.destination}}</span></button>
-            } @empty {<p class="quiet">No deliveries need attention.</p>}
-          }
-          <div class="section-heading drivers-heading"><h2>Demo driver availability</h2><button class="link" (click)="setTab('Fleet')">All drivers</button></div>
-          @for(driver of availableDrivers(); track driver.id) {<div class="ready-driver"><span class="driver-initials" aria-hidden="true">{{driver.name.split(' ')[0][0]}}{{driver.name.split(' ')[1][0]}}</span><div><strong>{{driver.name}}</strong><small>{{driver.id}} / {{driver.maxLoad - driver.load}} spaces available</small></div><span class="availability-dot" aria-label="Available"></span></div>} @empty {<p class="quiet">All drivers are on a run.</p>}
-        </aside>
+  <div class="main-shell">
+    <header class="topbar"><div>Operations <span class="breadcrumb-slash">/</span> <strong>{{currentTab() === 'Fleet' ? 'Drivers' : currentTab() === 'Deliveries' ? 'Orders' : 'Dispatch'}}</strong></div><div class="topbar-actions"><span class="workspace-label">Sareevelo control center</span><button class="theme-toggle" type="button" (click)="theme.toggle()" [attr.aria-label]="theme.current() === 'light' ? 'Switch to dark mode' : 'Switch to light mode'" [attr.aria-pressed]="theme.current() === 'dark'"><span aria-hidden="true">{{theme.current() === 'light' ? '◐' : '☀'}}</span>{{theme.current() === 'light' ? 'Dark mode' : 'Light mode'}}</button></div></header>
+    <main id="workspace" tabindex="-1">
+      @if(currentTab() === 'Overview') {
+        <section class="dispatch-hero" aria-labelledby="dispatch-title">
+          <div class="hero-topline"><span>LOGISTICS, IN MOTION.</span><span>OPERATIONS / 01</span></div>
+          <div class="hero-copy"><p class="eyebrow"><span></span> THE SAREEVELO CONTROL CENTER</p><h2 id="dispatch-title">MOVE<br><span>BEYOND.</span></h2><p class="hero-description">Intelligent logistics. Seamless operations.<br>Complete control.</p><a class="hero-link" href="#dispatch-workload">Explore your operations <span aria-hidden="true">↘</span></a></div>
+          <div class="cargo-scene" aria-hidden="true"><div class="cargo-orbit"></div><img src="brand/chrome-cargo.svg" width="720" height="480" alt="" fetchpriority="high"><span class="cargo-caption">PRECISION IN EVERY MOVEMENT</span></div>
+          <div class="hero-bottomline"><span>ONE WORKSPACE. EVERY DELIVERY.</span><span aria-hidden="true">SCROLL TO CONTROL ↓</span></div>
+        </section>
       }
-    </div>
-  }
-  @if (currentTab() === 'Fleet') {
-    <p class="integration-notice">Demo roster. Driver management is not connected to the backend.</p>
-    <div class="section-heading"><h2>{{drivers().length}} drivers <span class="quiet">/ {{summary().availableDrivers}} available</span></h2></div>
-    <div class="table-scroll"><table><thead><tr><th>Driver</th><th>Reference</th><th>Availability</th><th>Current load</th></tr></thead><tbody>@for(driver of drivers(); track driver.id){<tr><td><strong>{{driver.name}}</strong></td><td class="reference">{{driver.id}}</td><td>{{driver.status === 'AVAILABLE' ? 'Available' : 'On a run'}}</td><td><div class="load-meter"><span [style.width.%]="driver.load / driver.maxLoad * 100"></span></div>{{driver.load}} / {{driver.maxLoad}}</td></tr>}</tbody></table></div>
-  }
-  @if (currentTab() === 'Activity') {<p class="integration-notice">Demo activity only. These events are unrelated to your saved deliveries.</p><section class="activity-log" aria-label="Activity log">@for(event of activities(); track event.id){<div class="log-row"><time>{{event.timestamp | date:'HH:mm'}}</time><span>{{event.message}}</span><small>{{event.timestamp | date:'d MMM yyyy'}}</small></div>}</section>}
-  <footer><span>Orders are saved by the backend. Driver and activity views are demos.</span><span>Simulation disabled for real orders</span></footer>
-</main>
-@if (currentTab() !== 'Overview' ? selectedOrder() : null; as order) {<aside class="selection-bar" aria-label="Selected delivery"><div><strong>{{order.trackingNumber}} / {{order.customer}}</strong><span>{{order.destination}} / {{statusLabel(order.status)}} / {{order.pickupAddress}}</span></div><button class="link" (click)="closeDetails()">Close</button></aside>}
-@if (showNewOrder()) {
-  <div class="modal-backdrop" (click)="closeNewOrder()"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="new-delivery-title" (click)="$event.stopPropagation()" (keydown.escape)="closeNewOrder()">
-    <div class="section-heading"><h2 id="new-delivery-title">New delivery</h2><button class="link" (click)="closeNewOrder()">Close</button></div>
-        <form (ngSubmit)="createOrder()" #orderForm="ngForm" [attr.aria-busy]="saving()">
-      <label>Tracking number<input required maxlength="50" placeholder="SAR-1001" [ngModel]="newTrackingNumber()" (ngModelChange)="newTrackingNumber.set($event)" name="trackingNumber" [disabled]="saving()"></label>
-      <label>Customer<input required maxlength="150" placeholder="Company or customer name" [ngModel]="newCustomer()" (ngModelChange)="newCustomer.set($event)" name="customer" [disabled]="saving()"></label>
-      <label>Pickup address<input required maxlength="255" placeholder="Passau, Germany" [ngModel]="newPickupAddress()" (ngModelChange)="newPickupAddress.set($event)" name="pickupAddress" [disabled]="saving()"></label>
-      <label>Delivery address<input required maxlength="255" placeholder="Munich, Germany" [ngModel]="newDestination()" (ngModelChange)="newDestination.set($event)" name="destination" [disabled]="saving()"></label>
-      @if (createError()) {<p class="form-error" role="alert">{{createError()}}</p>}
-      <p class="quiet">The delivery will be saved with Pending status.</p>
-      <div class="modal-actions"><button class="secondary" type="button" [disabled]="saving()" (click)="closeNewOrder()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || orderForm.invalid">{{saving() ? 'Saving…' : 'Create delivery'}}</button></div>
+      <div class="page-heading">
+        <div><span class="eyebrow section-index">OPERATIONS / {{currentTab() === 'Fleet' ? '03' : currentTab() === 'Deliveries' ? '02' : '01'}}</span><h1>{{currentTab() === 'Fleet' ? 'Your driving force.' : currentTab() === 'Deliveries' ? 'Every move matters.' : 'Operations overview.'}}</h1><p>{{currentTab() === 'Fleet' ? 'Manage your roster and see who has room for the next delivery.' : currentTab() === 'Deliveries' ? 'Every order, from pickup to delivery.' : 'Review the queue. Match each delivery with the right driver.'}}</p></div>
+        <div class="heading-actions"><button class="secondary" (click)="refreshWorkspace()" [disabled]="loading() || driversLoading()"><app-icon name="refresh"/><span>Refresh</span></button>@if(currentTab() === 'Fleet'){<button class="primary" (click)="openNewDriver()"><app-icon name="plus"/>Add driver</button>}@else{<button class="primary" (click)="openNewOrder()"><app-icon name="plus"/>New delivery</button>}</div>
+      </div>
+
+      @if(loadError()){<div class="notice error" role="alert"><app-icon name="alert"/><span>{{loadError()}}</span><button class="text-button" (click)="reloadOrders()">Retry orders</button></div>}
+      @if(driversError()){<div class="notice error" role="alert"><app-icon name="alert"/><span>{{driversError()}}</span><button class="text-button" (click)="reloadDrivers()">Retry drivers</button></div>}
+
+      @if(currentTab() === 'Overview') {
+        <section class="operational-alerts" aria-labelledby="alerts-title">
+          <div class="alerts-heading"><h2 id="alerts-title">Needs your attention</h2><span class="eyebrow">DISPATCH SIGNALS</span></div>
+          @if(loading() || driversLoading()){<p class="help-text" role="status">Checking current operations…</p>}
+          @if(loadError() || driversError()){<p class="help-text">Some alerts are unavailable. Retry the failed data source above for a complete picture.</p>}
+          <div class="alert-grid">@for(alert of operationalAlerts(); track alert.key){<article class="operation-alert" [class.urgent]="alert.key === 'delayed'"><app-icon name="alert"/><div><h3>{{alert.title}}</h3><p>{{alert.detail}}</p><button class="text-button" (click)="openOperationalAlert(alert.key)">{{alert.action}} <app-icon name="arrow"/></button></div></article>}</div>
+          @if(!loading() && !driversLoading() && !loadError() && !driversError() && !operationalAlerts().length){<p class="alerts-clear"><app-icon name="check"/>No dispatch exceptions in the current records.</p>}
+        </section>
+        <section id="dispatch-workload" class="operations-strip" aria-label="Dispatch workload">
+          <button class="workload primary-workload" (click)="showUnassigned()" [disabled]="loading() || !!loadError()"><span>Awaiting assignment</span><strong>{{loading() || loadError() ? '—' : summary().unassigned}}</strong><small>Review pending orders <app-icon name="arrow"/></small></button>
+          <div class="workload"><span>Assigned orders</span><strong>{{loading() || loadError() ? '—' : summary().assigned}}</strong><small>Orders with a driver</small></div>
+          <div class="workload"><span>Available capacity</span><strong>{{driversLoading() || driversError() ? '—' : summary().spaces}}<em>spaces</em></strong><small>{{driversLoading() || driversError() ? 'Driver capacity unavailable' : summary().availableDrivers + ' drivers with room'}}</small></div>
+          <button class="workload" [class.has-exceptions]="summary().delayedOrders > 0" (click)="setFilter('DELAYED')" [disabled]="loading() || !!loadError()"><span>Delayed orders</span><strong>{{loading() || loadError() ? '—' : summary().delayedOrders}}</strong><small>Review exceptions <app-icon name="arrow"/></small></button>
+        </section>
+      }
+
+      <div class="work-area">
+        <section class="records-panel" [attr.aria-label]="currentTab() === 'Fleet' ? 'Driver roster' : 'Delivery manifest'">
+          <div class="panel-heading"><div><h2>{{currentTab() === 'Fleet' ? 'Driver roster' : 'Delivery manifest'}}</h2><span class="count-badge">{{currentTab() === 'Fleet' ? (driversLoading() || driversError() ? '—' : drivers().length) : (loading() || loadError() ? '—' : orders().length)}}</span></div><span class="panel-caption">{{currentTab() === 'Fleet' ? 'Team & capacity' : 'All saved orders'}}</span></div>
+          @if(currentTab() !== 'Fleet') {
+            <div class="bulk-toolbar" aria-label="Bulk order actions"><label class="selection-label"><input type="checkbox" aria-label="Select all visible eligible orders" [checked]="allVisibleChecked()" [indeterminate]="someVisibleChecked()" [disabled]="loading() || !!loadError() || bulkAssigning() || !visibleEligibleOrders().length" (change)="toggleVisibleSelection()">Select visible pending orders</label><span aria-live="polite">{{checkedOrders().length}} selected@if(hiddenCheckedCount()){ · {{hiddenCheckedCount()}} hidden by filters}</span><button class="text-button" (click)="clearOrderSelection()" [disabled]="bulkAssigning() || !checkedOrders().length">Clear</button><button class="primary" (click)="openBulkAssignment()" [disabled]="!checkedOrders().length || loading() || !!loadError() || assigning() || statusChanging() || bulkAssigning()">Assign selected</button></div>
+            <div class="table-toolbar"><label class="search-field"><app-icon name="search"/><input type="search" placeholder="Search tracking, customer or address" aria-label="Search orders" [ngModel]="query()" (ngModelChange)="query.set($event)"></label><button class="filter-toggle" [class.selected]="unassignedOnly()" [attr.aria-pressed]="unassignedOnly()" (click)="unassignedOnly() ? clearFilters() : showUnassigned()">Unassigned</button></div>
+            <div class="status-tabs" aria-label="Order status filters">@for(item of filters; track item.key){<button [class.selected]="filter() === item.key && !unassignedOnly()" [attr.aria-pressed]="filter() === item.key && !unassignedOnly()" (click)="setFilter(item.key)">{{item.label}}<span>{{loading() || loadError() ? '—' : filterCount(item.key)}}</span></button>}</div>
+            <div class="table-scroll"><table><thead><tr><th scope="col" [attr.aria-sort]="sortAria('trackingNumber')"><button class="sort-button" (click)="sortBy('trackingNumber')">Order <app-icon name="sort"/></button></th><th scope="col" [attr.aria-sort]="sortAria('destination')"><button class="sort-button" (click)="sortBy('destination')">Delivery address <app-icon name="sort"/></button></th><th scope="col">Driver</th><th scope="col" [attr.aria-sort]="sortAria('status')"><button class="sort-button" (click)="sortBy('status')">Status <app-icon name="sort"/></button></th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
+              <tbody>
+                @if(loading()){<tr><td colspan="5"><div class="empty-state" role="status"><span class="spinner"></span><h3>Loading orders</h3><p>Retrieving the latest delivery records.</p></div></td></tr>}
+                @else if(loadError()){<tr><td colspan="5"><div class="empty-state"><app-icon name="alert"/><h3>Orders could not be loaded</h3><button class="secondary" (click)="reloadOrders()">Try again</button></div></td></tr>}
+                @else { @for(order of visibleOrders(); track order.id){
+                  <tr [class.selected-row]="selectedOrderId() === order.id">
+                    <td><div class="order-select-cell"><input type="checkbox" [attr.aria-label]="'Select order ' + order.trackingNumber" [checked]="checkedOrderIds().has(order.id) && order.status === 'PENDING' && order.driverId === null" [disabled]="bulkAssigning() || order.status !== 'PENDING' || order.driverId !== null" [title]="order.status === 'PENDING' && order.driverId === null ? 'Select for bulk assignment' : 'Only pending, unassigned orders can be selected'" (change)="toggleOrderSelection(order.id)"><div><button class="record-link" (click)="selectOrder(order.id)">{{order.trackingNumber}}</button><span class="cell-secondary">{{order.customer}}</span></div></div></td>
+                    <td><span class="address-cell">{{order.destination}}</span></td>
+                    <td>@if(order.driverId !== null){<button class="driver-link" (click)="viewDriver(order.driverId)">{{driverLabel(order.driverId)}}</button>}@else{<span class="unassigned"><span></span>Unassigned</span>}</td>
+                    <td><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span></td>
+                    <td><button class="icon-button" (click)="selectOrder(order.id)" [attr.aria-label]="'View order ' + order.trackingNumber"><app-icon name="arrow"/></button></td>
+                  </tr>
+                } @empty {<tr><td colspan="5"><div class="empty-state">@if(orders().length){<span class="search-empty-icon"><app-icon name="search"/></span>}@else{<img class="workspace-illustration " src="brand/chrome-cargo.svg" width="1536" height="1024" alt="" aria-hidden="true" loading="lazy" decoding="async">}<h3>{{orders().length ? 'No matching orders' : 'Your delivery queue starts here'}}</h3><p>{{orders().length ? 'Try a different search or clear the current filters.' : 'Create an order with its pickup and delivery details.'}}</p>@if(orders().length){<button class="secondary" (click)="clearFilters()">Clear filters</button>}@else{<button class="primary" (click)="openNewOrder()"><app-icon name="plus"/>New delivery</button>}</div></td></tr>} }
+              </tbody></table></div>
+            <div class="table-footer"><span>{{loading() || loadError() ? 'Orders unavailable' : visibleOrders().length + ' of ' + orders().length + ' orders'}}</span><span>Choose an order to review or assign</span></div>
+          } @else {
+            <div class="table-toolbar"><label class="search-field"><app-icon name="search"/><input type="search" placeholder="Search name, code, phone or email" aria-label="Search drivers" [ngModel]="driverQuery()" (ngModelChange)="driverQuery.set($event)"></label><select aria-label="Filter driver availability" [ngModel]="driverFilter()" (ngModelChange)="driverFilter.set($event)"><option value="ALL">All statuses</option><option value="AVAILABLE">Available</option><option value="ON_DELIVERY">On delivery</option><option value="OFFLINE">Offline</option></select></div>
+            <div class="table-scroll"><table><thead><tr><th scope="col">Driver</th><th scope="col">Status</th><th scope="col">Load / capacity</th><th scope="col">Free spaces</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead><tbody>
+              @if(driversLoading()){<tr><td colspan="5"><div class="empty-state" role="status"><span class="spinner"></span><h3>Loading drivers</h3></div></td></tr>}
+              @else if(driversError()){<tr><td colspan="5"><div class="empty-state"><app-icon name="alert"/><h3>Driver roster unavailable</h3><button class="secondary" (click)="reloadDrivers()">Try again</button></div></td></tr>}
+              @else { @for(driver of visibleDrivers(); track driver.id){<tr [class.selected-row]="selectedDriverId() === driver.id"><td><div class="driver-cell"><span class="avatar" aria-hidden="true">{{driver.name.slice(0, 2).toUpperCase()}}</span><div><button class="record-link" (click)="selectDriver(driver.id)">{{driver.name}}</button><span class="cell-secondary">{{driver.employeeCode}}</span>@if(driver.mobileNumber){<a class="contact-link roster-phone" [href]="'tel:' + driver.mobileNumber">{{driver.mobileNumber}}</a>}@else{<span class="cell-secondary contact-missing">Phone not added</span>}</div></div></td><td><span class="status" [ngClass]="driver.status">{{driverStatusLabel(driver.status)}}</span></td><td><span class="capacity-value">{{driver.capacity - driver.availableSpaces}} / {{driver.capacity}}</span><div class="capacity-track" aria-hidden="true"><span [style.width.%]="(driver.capacity - driver.availableSpaces) / driver.capacity * 100"></span></div></td><td><strong class="spaces-count">{{driver.availableSpaces}}</strong></td><td><button class="icon-button" (click)="selectDriver(driver.id)" [attr.aria-label]="'View driver ' + driver.name"><app-icon name="arrow"/></button></td></tr>}
+              @empty {<tr><td colspan="5"><div class="empty-state">@if(drivers().length){<span class="search-empty-icon"><app-icon name="search"/></span>}@else{<img class="workspace-illustration " src="brand/chrome-cargo.svg" width="1536" height="1024" alt="" aria-hidden="true" loading="lazy" decoding="async">}<h3>{{drivers().length ? 'No matching drivers' : 'Build your driver roster'}}</h3><p>{{drivers().length ? 'Try another name, code or availability filter.' : 'Add a driver and set their delivery capacity.'}}</p>@if(drivers().length){<button class="secondary" (click)="driverQuery.set(''); driverFilter.set('ALL')">Clear filters</button>}@else{<button class="primary" (click)="openNewDriver()">Add driver</button>}</div></td></tr>} }
+            </tbody></table></div><div class="table-footer"><span>{{driversLoading() || driversError() ? 'Drivers unavailable' : visibleDrivers().length + ' of ' + drivers().length + ' drivers'}}</span><span>Capacity is measured in orders</span></div>
+          }
+        </section>
+
+        <aside class="inspector" aria-label="Record details" aria-live="polite">
+          <div class="inspector-heading"><h2>{{currentTab() === 'Fleet' ? 'Driver details' : 'Order details'}}</h2>@if(currentTab() === 'Fleet' ? selectedDriverId() !== null : selectedOrderId() !== null){<button class="icon-button" aria-label="Close details" (click)="currentTab() === 'Fleet' ? closeDriverDetails() : closeDetails()"><app-icon name="close"/></button>}@else{<app-icon [name]="currentTab() === 'Fleet' ? 'person' : 'orders'"/>}</div>
+          @if(currentTab() !== 'Fleet') {
+            @if(detailLoading()){<div class="inspector-empty" role="status"><span class="spinner"></span><p>Loading order details…</p></div>}
+            @else if(detailError()){<div class="inspector-body"><p class="form-error" role="alert">{{detailError()}}</p><button class="secondary" (click)="retryDetails()">Retry details</button></div>}
+            @else if(selectedOrder(); as order){
+              <div class="inspector-body"><div class="record-title"><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span><h3>{{order.trackingNumber}}</h3><p>{{order.customer}}</p></div>
+                <div class="route"><div class="route-stop"><span class="route-dot"></span><div><span class="field-label">Pickup address</span><p>{{order.pickupAddress}}</p></div></div><div class="route-stop"><span class="route-dot destination-dot"></span><div><span class="field-label">Delivery address</span><p>{{order.destination}}</p></div></div></div>
+                <div class="record-meta"><span>Order ID</span><strong>#{{order.id}}</strong></div>
+                <section class="lifecycle-section" aria-label="Delivery progress" [attr.aria-busy]="statusChanging()">
+                  <h4>Delivery progress</h4>
+                  @if(order.status === 'PENDING') {
+                    @if(order.driverId !== null){<p class="help-text">The driver is assigned. Start the delivery when it leaves for its destination.</p><button class="primary full-width" [disabled]="statusChanging() || assigning()" (click)="updateOrderStatus('IN_TRANSIT')"><app-icon name="start"/>Start delivery</button>}
+                    @else {<p class="help-text">Assign a driver below to start this delivery.</p>}
+                  } @else if(order.status === 'IN_TRANSIT' || order.status === 'DELAYED') {
+                    <div class="lifecycle-actions">@if(order.status === 'IN_TRANSIT'){<button class="secondary" [disabled]="statusChanging()" (click)="updateOrderStatus('DELAYED')"><app-icon name="alert"/>Mark delayed</button>}@else{<button class="secondary" [disabled]="statusChanging()" (click)="updateOrderStatus('IN_TRANSIT')"><app-icon name="start"/>Resume delivery</button>}
+                    <button class="primary" [disabled]="statusChanging()" (click)="updateOrderStatus('DELIVERED')"><app-icon name="delivered"/>Mark delivered</button></div>
+                    <p class="help-text completion-note">Completing this delivery releases one space for the driver.</p>
+                  } @else {<p class="delivery-complete"><app-icon name="delivered"/>Delivery completed</p>}
+                  @if(statusChanging()){<p class="help-text" role="status">Updating delivery…</p>}
+                  @if(statusError()){<p class="form-error" role="alert">{{statusError()}}</p>}
+                </section>
+                <section class="assignment-section"><h4>Driver assignment</h4>
+                  @if(order.driverId !== null){<div class="assigned-driver"><span class="avatar"><app-icon name="person"/></span><div><strong>{{driverLabel(order.driverId)}}</strong><span>Assigned to this order</span></div><app-icon name="check"/></div><button class="text-button" (click)="viewDriver(order.driverId)">View driver details <app-icon name="arrow"/></button>}
+                  @else if(order.status === 'PENDING') {
+                    <p class="help-text">Choose a driver with space for this delivery.</p>
+                    @if(driversLoading()){<p role="status">Loading available drivers…</p>}
+                    @else if(driversError()){<p class="form-error">Driver availability could not be loaded.</p><button class="text-button" (click)="reloadDrivers()">Retry drivers</button>}
+                    @else if(!availableDrivers().length){<p class="help-text">No drivers have capacity right now.</p><button class="secondary" (click)="openNewDriver()"><app-icon name="plus"/>Add driver</button>}
+                    @else {<form (ngSubmit)="assignDriver()"><label class="form-field">Available driver<select name="assignmentDriver" [(ngModel)]="assignmentDriverId" [disabled]="assigning()" required><option [ngValue]="null">Select a driver</option>@for(driver of availableDrivers(); track driver.id){<option [ngValue]="driver.id">{{driver.name}} ({{driver.employeeCode}}) — {{driver.availableSpaces}} free</option>}</select></label><button class="primary full-width" type="submit" [disabled]="assigning() || assignmentDriverId === null"><app-icon name="check"/>{{assigning() ? 'Assigning…' : 'Assign driver'}}</button></form>}
+                  } @else {<p class="help-text">Only pending, unassigned orders can be assigned.</p>}
+                  @if(assignError()){<p class="form-error" role="alert">{{assignError()}}</p>}
+                </section>
+                <app-order-activity [orderId]="order.id"/>
+              </div>
+            } @else {<div class="inspector-empty"><img class="workspace-illustration inspector-illustration" src="brand/chrome-cargo.svg" width="1536" height="1024" alt="" aria-hidden="true" loading="lazy" decoding="async"><h3>Your next dispatch decision</h3><p>Select an order to review its route and assign a driver.</p>@if(!loading() && !loadError() && summary().unassigned > 0){<button class="text-button" (click)="showUnassigned()">{{summary().unassigned}} awaiting assignment <app-icon name="arrow"/></button>}</div>}
+          } @else {
+            @if(driverDetailLoading()){<div class="inspector-empty" role="status"><span class="spinner"></span><p>Loading driver details…</p></div>}
+            @else if(driverDetailError()){<div class="inspector-body"><p class="form-error" role="alert">{{driverDetailError()}}</p><button class="secondary" (click)="selectDriver(selectedDriverId()!)">Retry details</button></div>}
+            @else if(selectedDriver(); as driver){<div class="inspector-body"><div class="record-title"><span class="avatar large-avatar">{{driver.name.slice(0, 2).toUpperCase()}}</span><h3>{{driver.name}}</h3><p>{{driver.employeeCode}}</p><span class="status" [ngClass]="driver.status">{{driverStatusLabel(driver.status)}}</span></div><div class="record-meta"><span>Driver ID</span><strong>#{{driver.id}}</strong></div><div class="capacity-detail"><h4>Delivery capacity</h4><strong>{{driver.availableSpaces}}<span> / {{driver.capacity}} free</span></strong><div class="capacity-track"><span [style.width.%]="(driver.capacity - driver.availableSpaces) / driver.capacity * 100"></span></div><p>{{driver.capacity - driver.availableSpaces}} spaces in use</p></div><section class="driver-profile" aria-label="Driver contact and vehicle details"><div class="profile-heading"><h4>Contact & vehicle</h4><button class="text-button" (click)="editDriverProfile()">Edit profile</button></div><dl><div><dt>Mobile number</dt><dd>@if(driver.mobileNumber){<a class="contact-link" [href]="'tel:' + driver.mobileNumber">{{driver.mobileNumber}}</a>}@else{<span class="contact-missing">Not added</span>}</dd></div><div><dt>Email</dt><dd>@if(driver.email){<a class="contact-link" [href]="'mailto:' + driver.email">{{driver.email}}</a>}@else{Not added}</dd></div><div><dt>Vehicle</dt><dd>{{vehicleLabel(driver.vehicleType)}}</dd></div><div><dt>Registration</dt><dd>{{driver.vehicleRegistration || 'Not added'}}</dd></div>@if(driver.notes){<div class="profile-notes"><dt>Operational notes</dt><dd>{{driver.notes}}</dd></div>}</dl></section><section class="driver-orders"><h4>Assigned orders</h4>@if(loading()){<p class="help-text">Loading orders…</p>}@else if(loadError()){<button class="text-button" (click)="reloadOrders()">Retry assigned orders</button>}@else { @for(order of driverOrders(); track order.id){<button class="related-order" (click)="viewDriverOrder(order.id)"><span><strong>{{order.trackingNumber}}</strong><small>{{order.customer}}</small></span><app-icon name="arrow"/></button>} @empty {<p class="help-text">No orders assigned to this driver.</p>} }</section></div>}
+            @else {<div class="inspector-empty"><img class="workspace-illustration inspector-illustration" src="brand/chrome-cargo.svg" width="1536" height="1024" alt="" aria-hidden="true" loading="lazy" decoding="async"><h3>Know your available capacity</h3><p>Select a driver to review their details, capacity and assigned orders.</p></div>}
+          }
+        </aside>
+      </div>
+      <footer class="workspace-footer"><span>{{currentTab() === 'Fleet' ? 'Driver roster' : 'Order workspace'}}</span><span>Sareevelo logistics</span></footer>
+    </main>
+  </div>
+</div>
+
+<dialog class="modal" [appDialog]="showNewOrder()" (dismissed)="closeNewOrder()" aria-labelledby="new-order-title">
+  <div class="modal-heading"><div><span class="modal-symbol"><app-icon name="orders"/></span><h2 id="new-order-title">New delivery</h2><p>Add the customer and route to create an order.</p></div><button class="icon-button" aria-label="Close new delivery" (click)="closeNewOrder()" [disabled]="saving()"><app-icon name="close"/></button></div>
+  <form (ngSubmit)="createOrder()" #orderForm="ngForm" [attr.aria-busy]="saving()">
+    <div class="form-grid"><div class="auto-tracking"><span class="field-label">Tracking number</span><strong>Generated automatically</strong><span>A unique number is assigned when you save this delivery.</span></div><label class="form-field">Customer<input name="customerName" required maxlength="150" placeholder="Customer or company name" [ngModel]="newCustomer()" (ngModelChange)="editField('customerName', $event)" [disabled]="saving()" #customerInput="ngModel" [attr.aria-invalid]="!!fieldError('customerName', customerInput.touched ?? false)" aria-describedby="customer-error">@if(fieldError('customerName', customerInput.touched ?? false); as error){<small class="field-error" id="customer-error">{{error}}</small>}</label></div>
+    <div class="form-route"><label class="form-field">Pickup address<input name="pickupAddress" required maxlength="255" placeholder="Street, city and postal code" [ngModel]="newPickupAddress()" (ngModelChange)="editField('pickupAddress', $event)" [disabled]="saving()" #pickupInput="ngModel" [attr.aria-invalid]="!!fieldError('pickupAddress', pickupInput.touched ?? false)" aria-describedby="pickup-error">@if(fieldError('pickupAddress', pickupInput.touched ?? false); as error){<small class="field-error" id="pickup-error">{{error}}</small>}</label><label class="form-field">Delivery address<input name="deliveryAddress" required maxlength="255" placeholder="Street, city and postal code" [ngModel]="newDestination()" (ngModelChange)="editField('deliveryAddress', $event)" [disabled]="saving()" #destinationInput="ngModel" [attr.aria-invalid]="!!fieldError('deliveryAddress', destinationInput.touched ?? false)" aria-describedby="destination-error">@if(fieldError('deliveryAddress', destinationInput.touched ?? false); as error){<small class="field-error" id="destination-error">{{error}}</small>}</label></div>
+    @if(createError()){<p class="form-error" role="alert">{{createError()}}</p>}
+    <p class="form-note"><app-icon name="orders"/>Your tracking number will appear after creation. The order starts as pending; assign a driver next.</p>
+    <div class="modal-actions"><button class="secondary" type="button" [disabled]="saving()" (click)="closeNewOrder()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || orderForm.invalid">{{saving() ? 'Creating…' : 'Create delivery'}}</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal driver-modal" [appDialog]="showNewDriver()" (dismissed)="closeNewDriver()" aria-labelledby="new-driver-title">
+  <div class="modal-heading"><div><span class="modal-symbol"><app-icon name="person"/></span><h2 id="new-driver-title">{{editingDriverId() === null ? 'Add driver' : 'Edit driver profile'}}</h2><p>{{editingDriverId() === null ? 'Add a team member, contact details and delivery capacity.' : 'Keep contact details and vehicle information up to date.'}}</p></div><button class="icon-button" aria-label="Close driver form" (click)="closeNewDriver()" [disabled]="driverSaving()"><app-icon name="close"/></button></div>
+  <form (ngSubmit)="createDriver()" #driverForm="ngForm" [attr.aria-busy]="driverSaving()">
+    <label class="form-field">Full name<input name="driverName" [(ngModel)]="driverName" required maxlength="150" placeholder="Driver’s name" [disabled]="driverSaving()"></label>
+    @if(editingDriverId() === null){<div class="form-grid"><label class="form-field">Employee code<input name="employeeCode" [(ngModel)]="employeeCode" required maxlength="50" placeholder="Unique employee code" [disabled]="driverSaving()"></label><label class="form-field">Delivery capacity<input name="capacity" type="number" [(ngModel)]="driverCapacity" required min="1" max="2147483647" step="1" [disabled]="driverSaving()"><small>Maximum number of orders</small></label></div>}
+    <div class="form-grid"><label class="form-field">Mobile number {{editingDriverId() === null ? '(required)' : '(optional)'}}<input name="mobileNumber" type="tel" autocomplete="tel" [(ngModel)]="mobileNumber" [required]="editingDriverId() === null" maxlength="32" placeholder="+49 151 23456789" [disabled]="driverSaving()"><small>7–15 digits; include a country code when possible.</small></label><label class="form-field">Email (optional)<input name="driverEmail" type="email" email autocomplete="email" [(ngModel)]="driverEmail" maxlength="254" placeholder="driver@example.com" [disabled]="driverSaving()" #emailInput="ngModel" [attr.aria-invalid]="emailInput.invalid && emailInput.touched" aria-describedby="driver-email-error">@if(emailInput.invalid && emailInput.touched){<small class="field-error" id="driver-email-error">Enter a valid email address.</small>}</label></div>
+    <div class="form-grid"><label class="form-field">Vehicle type (optional)<select name="vehicleType" [(ngModel)]="vehicleType" [disabled]="driverSaving()"><option value="">Not specified</option>@for(type of vehicleTypes; track type.value){<option [value]="type.value">{{type.label}}</option>}</select></label><label class="form-field">Vehicle registration (optional)<input name="vehicleRegistration" [(ngModel)]="vehicleRegistration" maxlength="32" placeholder="Registration / plate" [disabled]="driverSaving()"></label></div>
+    <label class="form-field">Operational notes (optional)<textarea name="driverNotes" [(ngModel)]="driverNotes" maxlength="1000" rows="3" placeholder="Relevant delivery or contact instructions" [disabled]="driverSaving()"></textarea><small>{{driverNotes.length}} / 1,000 characters</small></label>
+    @if(driverCreateError()){<p class="form-error" role="alert">{{driverCreateError()}}</p>}
+    <p class="form-note"><app-icon name="check"/>{{editingDriverId() === null ? 'New drivers are available for assignment immediately.' : 'Profile changes do not alter delivery capacity or assignments.'}}</p>
+    <div class="modal-actions"><button class="secondary" type="button" (click)="closeNewDriver()" [disabled]="driverSaving()">Cancel</button><button class="primary" type="submit" [disabled]="driverSaving() || driverForm.invalid">{{driverSaving() ? 'Saving…' : editingDriverId() === null ? 'Add driver' : 'Save changes'}}</button></div>
+  </form>
+</dialog>
+<dialog class="modal bulk-modal" [appDialog]="showBulkAssignment()" (dismissed)="closeBulkAssignment()" aria-labelledby="bulk-title">
+  <div class="modal-heading"><div><span class="eyebrow">DISPATCH / BATCH ASSIGNMENT</span><h2 id="bulk-title">Assign {{bulkItems().length}} orders</h2><p>Assign every selected order to one driver. Each order is saved separately; successful assignments remain saved if another fails.</p></div><button class="icon-button" aria-label="Close bulk assignment" [disabled]="bulkAssigning()" (click)="closeBulkAssignment()"><app-icon name="close"/></button></div>
+  @if(!bulkAssigning() && !bulkFinished()) {
+    <ul class="batch-selection" aria-label="Orders to assign">@for(item of bulkItems(); track item.id){<li>{{item.trackingNumber}} <span>#{{item.id}}</span></li>}</ul>
+    <form (ngSubmit)="assignSelectedOrders()">
+      @if(driversLoading()){<p class="help-text" role="status">Refreshing driver capacity…</p>}
+      @else if(driversError()){<p class="form-error" role="alert">{{driversError()}}</p><button class="secondary" type="button" (click)="reloadDrivers()">Retry availability</button>}
+      @else if(!bulkDrivers().length){<p class="form-error">No online driver has {{bulkItems().length}} free spaces. Close this dialog and select fewer orders, or review your driver roster.</p>}
+      <label class="form-field">Assign to driver<select name="bulkDriver" [(ngModel)]="bulkDriverId" [disabled]="driversLoading() || !!driversError() || !bulkDrivers().length" required><option [ngValue]="null">Select a driver</option>@for(driver of bulkDrivers(); track driver.id){<option [ngValue]="driver.id">{{driver.name}} ({{driver.employeeCode}}) — {{driver.availableSpaces}} spaces free</option>}</select></label>
+      <p class="form-note">Availability can change. You will receive a separate result for each order. Keep this window open while assignments run.</p>
+      @if(bulkError()){<p class="form-error" role="alert">{{bulkError()}}</p>}
+      <div class="modal-actions"><button class="secondary" type="button" (click)="closeBulkAssignment()">Cancel</button><button class="primary" type="submit" [disabled]="bulkDriverId === null || loading() || !!loadError() || driversLoading() || !!driversError() || !bulkDrivers().length">Confirm assignment</button></div>
     </form>
-  </section></div>
-}
-@if(toast()){<div class="toast" role="status">{{toast()}}</div>}
+  } @else {
+    <div class="batch-progress" role="status"><strong>{{bulkFinished() ? 'Batch complete' : 'Assigning orders…'}}</strong><p>{{bulkResults().length}} / {{bulkItems().length}} processed · {{bulkSuccessCount()}} confirmed</p></div>
+    <ul class="batch-results" aria-label="Assignment results">@for(result of bulkResults(); track result.id){<li><div><strong>{{result.trackingNumber}}</strong><span class="status" [class.DELIVERED]="result.outcome === 'assigned'" [class.DELAYED]="result.outcome === 'failed' || result.outcome === 'unknown'">{{result.outcome === 'unknown' ? 'Needs review' : result.outcome === 'skipped' ? 'Not attempted' : result.outcome === 'assigned' ? 'Assigned' : 'Failed'}}</span></div><p>{{result.message}}</p></li>}</ul>
+    @if(bulkFinished()){<p class="help-text">Orders and capacity are being refreshed. Review any unconfirmed orders before starting another batch.</p>}
+    <div class="modal-actions"><button class="primary" [disabled]="bulkAssigning()" (click)="closeBulkAssignment()">{{bulkAssigning() ? 'Please wait…' : 'Done'}}</button></div>
+  }
+</dialog>
+@if(toast()){<div class="toast" role="status"><app-icon name="check"/>{{toast()}}</div>}

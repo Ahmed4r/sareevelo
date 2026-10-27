@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 /** Errors for the order API only; no database or stack-trace details reach the client. */
-@RestControllerAdvice(assignableTypes = OrderController.class)
+@RestControllerAdvice(assignableTypes = {OrderController.class, com.sareevelo.sareevelo_backend.driver.DriverController.class})
 public class OrderExceptionHandler {
     public record ApiError(String code, String message, Map<String, String> fieldErrors) {}
 
@@ -43,10 +43,14 @@ public class OrderExceptionHandler {
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    ResponseEntity<ApiError> constraint(DataIntegrityViolationException exception) {
+    ResponseEntity<ApiError> constraint(DataIntegrityViolationException exception, jakarta.servlet.http.HttpServletRequest request) {
         // The unique database constraint also protects simultaneous creates.
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
             if (cause instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
+                if (request.getRequestURI().startsWith("/api/v1/drivers")) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                            "DUPLICATE_EMPLOYEE_CODE", "This employee code is already in use. Choose another.", Map.of()));
+                }
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
                         "DUPLICATE_TRACKING_NUMBER",
                         "This tracking number is already in use. Enter a different tracking number.", Map.of()));

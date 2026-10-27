@@ -5,7 +5,8 @@
   "scripts": {
     "start": "ng serve --host 0.0.0.0",
     "build": "ng build",
-    "test": "node --test tests/orders.test.mjs"
+    "test": "node --test tests/orders.test.mjs",
+    "test:bulk-http": "node tests/bulk-assignment-http.mjs"
   },
   "dependencies": {
     "@angular/animations": "^20.3.0",

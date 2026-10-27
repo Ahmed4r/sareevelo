@@ -8,5 +8,6 @@ public record OrderResponse(
     String customerName,
     String pickupAddress,
     String deliveryAddress,
-    OrderStatus status
+    OrderStatus status,
+    Long driverId
 ) {}
