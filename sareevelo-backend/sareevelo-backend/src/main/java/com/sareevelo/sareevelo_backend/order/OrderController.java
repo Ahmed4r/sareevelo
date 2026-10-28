@@ -50,6 +50,11 @@ public class OrderController {
         return orderService.assignDriver(id, request);
     }
 
+    @PutMapping("/{id}")
+    public OrderResponse updateOrder(@PathVariable Long id, @Valid @RequestBody com.sareevelo.sareevelo_backend.order.dto.UpdateOrderRequest request) {
+        return orderService.updateOrder(id, request);
+    }
+
     @PatchMapping("/{id}/status")
     public OrderResponse updateStatus(@PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
         return orderService.updateStatus(id, request);

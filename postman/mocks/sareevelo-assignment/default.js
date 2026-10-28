@@ -2,6 +2,10 @@
 // Test-only controls and records never enter the application's production config.
 const http = require('http');
 const key = 'sareevelo-assignment:state';
+function validWindow(body) {
+  const start = body.deliveryWindowStart, end = body.deliveryWindowEnd;
+  return (start == null && end == null) || (typeof start === 'string' && typeof end === 'string' && Number.isFinite(Date.parse(start)) && Date.parse(end) > Date.parse(start));
+}
 function seed(mode = 'success') {
   return { mode, calls: [], orders: [27, 28, 29].map(id => ({ id, trackingNumber: `SIM-${id}`, customerName: 'Simulation customer', pickupAddress: 'Pickup', deliveryAddress: 'Destination', status: 'PENDING', driverId: null })),
     drivers: [{ id: 8, name: 'Simulation driver', employeeCode: 'SIM-8', capacity: 3, availableSpaces: 3, status: 'AVAILABLE', mobileNumber: null, email: null, vehicleType: null, vehicleRegistration: null, notes: null }] };
@@ -15,18 +19,42 @@ http.createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/v1/orders') return send(200, state.orders);
   if (req.method === 'POST' && path === '/api/v1/orders') {
     const body = req.body;
+    if (!validWindow(body)) return send(400, { message: 'Provide both delivery window times with the end after the start' });
     if (['customerName', 'pickupAddress', 'deliveryAddress'].some(field => typeof body[field] !== 'string' || !body[field].trim() || body[field].trim().length > (field === 'customerName' ? 150 : 255))) return send(400, { message: 'Check customer and addresses' });
     const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     const generated = 'SAR-' + Array.from({ length: 4 }, () => Array.from({ length: 4 }, () => alphabet[require('crypto').randomInt(alphabet.length)]).join('')).join('-');
     const trackingNumber = body.trackingNumber?.trim() || generated;
     if (state.orders.some(order => order.trackingNumber === trackingNumber)) return send(409, { message: 'Tracking number already exists' });
     const order = { id: Math.max(...state.orders.map(item => item.id)) + 1, trackingNumber, customerName: body.customerName.trim(), pickupAddress: body.pickupAddress.trim(), deliveryAddress: body.deliveryAddress.trim(), status: 'PENDING', driverId: null };
+    order.deliveryWindowStart = body.deliveryWindowStart ?? null; order.deliveryWindowEnd = body.deliveryWindowEnd ?? null;
     state.orders.push(order); state.lastOrderCreate = body; await pm.state.set(key, state); return send(201, order);
   }
   const orderDetail = path.match(/^\/api\/v1\/orders\/(\d+)$/);
   if (req.method === 'GET' && orderDetail) {
     const order = state.orders.find(item => item.id === Number(orderDetail[1]));
     return order ? send(200, order) : send(404, { message: 'Order not found' });
+  }
+  if (req.method === 'PUT' && orderDetail) {
+    const order = state.orders.find(item => item.id === Number(orderDetail[1]));
+    if (!order) return send(404, { message: 'Order not found' });
+    if (order.status !== 'PENDING') return send(409, { message: 'Only pending orders can be edited' });
+    if (!validWindow(req.body) || ['customerName','pickupAddress','deliveryAddress'].some(field => typeof req.body[field] !== 'string' || !req.body[field].trim() || req.body[field].length > (field === 'customerName' ? 150 : 255))) return send(400, { message: 'Check order fields and delivery window' });
+    for (const field of ['customerName','pickupAddress','deliveryAddress']) order[field] = req.body[field].trim();
+    order.deliveryWindowStart = req.body.deliveryWindowStart ?? null; order.deliveryWindowEnd = req.body.deliveryWindowEnd ?? null;
+    await pm.state.set(key, state); return send(200, order);
+  }
+  const statusPath = path.match(/^\/api\/v1\/orders\/(\d+)\/status$/);
+  if (req.method === 'PATCH' && statusPath && req.body.status === 'CANCELLED') {
+    const order = state.orders.find(item => item.id === Number(statusPath[1]));
+    if (!order) return send(404, { message: 'Order not found' });
+    if (order.status === 'DELIVERED') return send(409, { message: 'Completed deliveries cannot be cancelled' });
+    if (order.status === 'CANCELLED') return send(200, order);
+    if (order.driverId !== null) {
+      const driver = state.drivers.find(item => item.id === order.driverId);
+      if (!driver || driver.availableSpaces >= driver.capacity) return send(409, { message: 'Driver capacity is inconsistent' });
+      driver.availableSpaces++; if (driver.availableSpaces === driver.capacity && driver.status !== 'OFFLINE') driver.status = 'AVAILABLE';
+    }
+    order.status = 'CANCELLED'; await pm.state.set(key, state); return send(200, order);
   }
   if (req.method === 'GET' && path === '/api/v1/drivers') return send(200, state.drivers);
   const detail = path.match(/^\/api\/v1\/drivers\/(\d+)$/);

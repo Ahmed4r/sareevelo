@@ -1,6 +1,11 @@
 import { Component, Input } from '@angular/core';
 
 const paths = {
+  list: 'M4 5h16v14H4z M4 10h16 M4 15h16 M9 5v14',
+  grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+  board: 'M3 4h5v16H3z M10 4h5v11h-5z M17 4h4v8h-4z',
+  density: 'M4 6h16 M4 12h16 M4 18h16',
+  phone: 'M7 3H4v4c0 7 6 13 13 13h4v-4l-5-2-2 2-6-6 2-2z',
   dispatch: 'M8 5h8a4 4 0 0 1 0 8H8a3 3 0 0 0 0 6h8 M3 5a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0 M16 16l3 3-3 3',
   orders: 'M4 7l8-4 8 4v10l-8 4-8-4z M4 7l8 4 8-4 M12 11v10 M8 5l8 4',
   drivers: 'M2 16V6h12v10 M14 9h4l4 5v3h-2 M2 17h2 M8 17h8 M14 13h7 M4 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0 M16 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0',

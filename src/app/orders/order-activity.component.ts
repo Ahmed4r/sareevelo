@@ -31,6 +31,7 @@ import { orderErrorMessage } from './order-errors';
 })
 export class OrderActivityComponent implements OnChanges, OnDestroy {
   @Input({ required: true }) orderId!: number;
+  @Input() refreshKey: unknown;
   private readonly api = inject(OrderApiService);
   private request?: Subscription;
   readonly events = signal<OrderActivity[]>([]);

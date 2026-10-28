@@ -6,7 +6,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "activity_events", indexes = @Index(name = "idx_activity_order", columnList = "order_id,id"))
 public class ActivityEvent {
-    public enum Type { ORDER_CREATED, DRIVER_ASSIGNED, DELIVERY_STARTED, DELIVERY_DELAYED, DELIVERY_RESUMED, DELIVERY_COMPLETED }
+    public enum Type { ORDER_CREATED, DRIVER_ASSIGNED, DELIVERY_STARTED, DELIVERY_DELAYED, DELIVERY_RESUMED, DELIVERY_COMPLETED, ORDER_UPDATED, ORDER_CANCELLED }
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

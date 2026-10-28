@@ -65,6 +65,16 @@ export class OrdersStore {
     this.detailError.set('');
   }
 
+  update(id: number, request: CreateOrderRequest): Observable<OrderView> {
+    return this.api.updateOrder(id, request).pipe(map(toOrderView), tap(order => this.acceptSaved(order)));
+  }
+
+  private acceptSaved(order: OrderView): void {
+    this.listRequest?.unsubscribe(); this.closeDetails(); this.loading.set(false); this.error.set('');
+    this.orders.update(orders => [order, ...orders.filter(existing => existing.id !== order.id)]);
+    this.selectedId.set(order.id); this.selected.set(order);
+  }
+
   create(request: CreateOrderRequest): Observable<OrderView> {
     return this.api.createOrder(request).pipe(map(toOrderView), tap(order => {
       // Prevent an older in-flight list or detail response from replacing the new order.

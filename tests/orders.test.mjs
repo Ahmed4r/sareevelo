@@ -35,8 +35,10 @@ const { OrdersStore } = await import(pathToFileURL(join(temporary, 'orders/order
 const { AppComponent } = await import(pathToFileURL(join(temporary, 'app.component.js')));
 const { orderErrorMessage } = await import(pathToFileURL(join(temporary, 'orders/order-errors.js')));
 const { OrderActivityComponent } = await import(pathToFileURL(join(temporary, 'orders/order-activity.component.js')));
+const { OrderViewsComponent } = await import(pathToFileURL(join(temporary, 'orders/order-views.component.js')));
 const { BulkAssignmentService } = await import(pathToFileURL(join(temporary, 'orders/bulk-assignment.service.js')));
 const { readTheme, ThemeService } = await import(pathToFileURL(join(temporary, 'shared/theme.service.js')));
+const { overdue, dueToday, matchesSchedule, localDateTime, windowError } = await import(pathToFileURL(join(temporary, 'orders/order-schedule.js')));
 TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
 let store, http, component;
 const order = { id: 27, trackingNumber: 'SAR-TEST', customerName: 'Test customer', pickupAddress: 'Passau', deliveryAddress: 'Munich', status: 'PENDING', driverId: null };
@@ -54,7 +56,7 @@ test('loads backend data with numeric IDs and presentation mapping, with no mock
   store.load(); assert.equal(store.loading(), true);
   http.expectOne('/api/v1/orders').flush([order]);
   assert.equal(store.loading(), false);
-  assert.deepEqual(store.orders(), [{ id: 27, trackingNumber: 'SAR-TEST', customer: 'Test customer', pickupAddress: 'Passau', destination: 'Munich', status: 'PENDING', driverId: null }]);
+  assert.deepEqual(store.orders(), [{ id: 27, trackingNumber: 'SAR-TEST', customer: 'Test customer', pickupAddress: 'Passau', destination: 'Munich', status: 'PENDING', driverId: null, deliveryWindowStart: null, deliveryWindowEnd: null }]);
 });
 test('loads numeric detail URLs and cancels stale selection requests', () => {
   store.select(27); const stale = http.expectOne('/api/v1/orders/27');
@@ -112,12 +114,145 @@ test('a missing proxy gives an actionable error instead of a generic failure', (
   assert.match(orderErrorMessage(error), /Restart the frontend/);
 });
 
+test('a stale backend explains unsupported edits and preserves the date draft', () => {
+  startComponent();
+  component.selectOrder(order.id); http.expectOne('/api/v1/orders/27').flush(order);
+  component.editOrder();
+  component.deliveryWindowStart = '2026-11-02T10:00';
+  component.deliveryWindowEnd = '2026-11-02T12:00';
+  component.createOrder();
+  http.expectOne('/api/v1/orders/27').flush({status:405}, {status:405, statusText:'Method Not Allowed'});
+  assert.match(component.createError(), /Restart the backend/);
+  assert.equal(component.deliveryWindowEnd, '2026-11-02T12:00');
+  assert.equal(component.showNewOrder(), true);
+});
+
 const driver = { id: 8, name: 'Alex', employeeCode: 'TEST-8', status: 'AVAILABLE', capacity: 2, availableSpaces: 2 };
 function startComponent() {
   component = TestBed.runInInjectionContext(() => new AppComponent());
   http.expectOne('/api/v1/orders').flush([order]);
   http.expectOne('/api/v1/drivers').flush([driver]);
 }
+
+test('alternate views preserve filtered order selection and use the existing detail request', () => {
+  startComponent();
+  component.toggleOrderSelection(order.id);
+  component.query.set('Munich');
+  component.orderView.set('board');
+  const views = new OrderViewsComponent();
+  views.orders = component.visibleOrders(); views.mode = 'board';
+  views.checked = component.checkedOrderIds();
+  assert.equal(views.groups.find(group => group.key === 'PENDING').orders[0].id, order.id);
+  assert.equal(views.checked.has(order.id), true);
+  assert.equal(views.groups.reduce((sum, group) => sum + group.orders.length, 0), 1);
+  const subscription = views.open.subscribe(id => component.selectOrder(id));
+  views.open.emit(order.id);
+  http.expectOne('/api/v1/orders/27').flush(order);
+  assert.equal(component.selectedOrder().trackingNumber, order.trackingNumber);
+  component.orderView.set('cards');
+  assert.equal(component.checkedOrders().length, 1);
+  component.query.set('No match');
+  views.orders = component.visibleOrders();
+  assert.equal(views.groups.every(group => group.orders.length === 0), true);
+  assert.equal(component.hiddenCheckedCount(), 1);
+  subscription.unsubscribe();
+});
+
+test('board keeps terminal records distinct and only flags unfinished deadlines', () => {
+  const views = new OrderViewsComponent();
+  views.mode = 'board'; views.now = Date.now();
+  views.orders = ['PENDING', 'IN_TRANSIT', 'DELAYED', 'DELIVERED', 'CANCELLED'].map((status, id) => ({
+    id, trackingNumber: 'SAR-' + id, customer: 'Customer', pickupAddress: 'A', destination: 'B',
+    status, driverId: null, deliveryWindowStart: '2020-01-01T10:00:00Z', deliveryWindowEnd: '2020-01-01T11:00:00Z'
+  }));
+  assert.deepEqual(views.groups.map(group => group.orders.length), [1, 1, 1, 1, 1]);
+  assert.deepEqual(views.orders.map(item => views.isLate(item)), [true, true, true, false, false]);
+  assert.deepEqual(views.orders.map(item => views.eligible(item)), [true, false, false, false, false]);
+  views.driverNames = new Map([[8, 'Alex']]);
+  assert.equal(views.driverName(8), 'Alex');
+  assert.equal(views.driverName(9), 'Driver #9');
+});
+
+test('schedule filters use local deadlines and exclude finished and unscheduled records', () => {
+  const now = new Date(2026, 9, 28, 12).getTime();
+  const end = new Date(2026, 9, 28, 11).toISOString();
+  const scheduled = { ...order, deliveryWindowEnd: end };
+  assert.equal(overdue(scheduled, now), true); assert.equal(dueToday(scheduled, now), true);
+  assert.equal(overdue(scheduled, Date.parse(end)), false);
+  assert.equal(dueToday({ ...scheduled, deliveryWindowEnd: new Date(2026, 9, 29, 0).toISOString() }, now), false);
+  for (const status of ['DELIVERED', 'CANCELLED']) {
+    assert.equal(overdue({ ...scheduled, status }, now), false); assert.equal(dueToday({ ...scheduled, status }, now), false);
+  }
+  assert.equal(overdue(order, now), false); assert.equal(matchesSchedule(order, 'UNSCHEDULED', now), true);
+  assert.equal(matchesSchedule({ ...order, status: 'CANCELLED' }, 'UNSCHEDULED', now), false);
+  assert.equal(windowError('', ''), ''); assert.match(windowError('2026-10-28T10:00', ''), /both/);
+  assert.match(windowError('2026-10-28T12:00', '2026-10-28T10:00'), /end after/);
+  assert.match(windowError('invalid', 'invalid'), /valid/);
+  assert.equal(windowError('2026-10-28T10:00', '2026-10-28T12:00'), '');
+});
+
+test('overdue alerts update from clock changes without changing manually reported status', () => {
+  startComponent(); const end = Date.now() + 60000;
+  component.reloadOrders(); http.expectOne('/api/v1/orders').flush([{ ...order, deliveryWindowStart: new Date(end - 3600000).toISOString(), deliveryWindowEnd: new Date(end).toISOString() }]);
+  component.clockNow.set(end - 1); assert.equal(component.operationalAlerts().some(alert => alert.key === 'overdue'), false);
+  component.clockNow.set(end + 1); assert.equal(component.operationalAlerts()[0].key, 'overdue');
+  assert.equal(component.orders()[0].status, 'PENDING');
+  component.openOperationalAlert('overdue'); component.clockNow.set(end + 1);
+  assert.equal(component.currentTab(), 'Deliveries'); assert.equal(component.scheduleFilter(), 'OVERDUE'); assert.equal(component.visibleOrders().length, 1);
+  component.clearFilters(); assert.equal(component.scheduleFilter(), 'ALL');
+});
+
+test('scheduled creation validates before POST and sends timezone-aware instants', () => {
+  startComponent(); component.openNewOrder(); component.newCustomer.set('Scheduled'); component.newPickupAddress.set('Pickup'); component.newDestination.set('Delivery');
+  component.deliveryWindowStart = '2026-11-02T10:00'; component.createOrder();
+  assert.match(component.scheduleError(), /both/); http.expectNone('/api/v1/orders');
+  component.deliveryWindowEnd = '2026-11-02T12:00'; component.createOrder();
+  const post = http.expectOne('/api/v1/orders');
+  assert.equal(post.request.body.deliveryWindowStart, new Date('2026-11-02T10:00').toISOString());
+  assert.equal(post.request.body.deliveryWindowEnd, new Date('2026-11-02T12:00').toISOString());
+  post.flush({ ...order, ...post.request.body });
+  assert.equal(component.deliveryWindowStart, ''); assert.equal(component.showNewOrder(), false);
+});
+
+test('pending edits retain tracking, clear schedule explicitly, and preserve form values on conflict', () => {
+  startComponent(); component.selectOrder(27);
+  const scheduled = { ...order, deliveryWindowStart: '2026-11-02T09:00:00Z', deliveryWindowEnd: '2026-11-02T11:00:00Z' };
+  http.expectOne('/api/v1/orders/27').flush(scheduled); component.editOrder();
+  assert.equal(component.deliveryWindowStart, localDateTime(scheduled.deliveryWindowStart)); assert.equal(component.editingTracking(), 'SAR-TEST');
+  component.newDestination.set('Updated address'); component.deliveryWindowStart = ''; component.deliveryWindowEnd = '';
+  component.createOrder(); component.createOrder();
+  const put = http.expectOne('/api/v1/orders/27'); assert.equal(put.request.method, 'PUT');
+  assert.deepEqual(put.request.body, { customerName: order.customerName, pickupAddress: order.pickupAddress, deliveryAddress: 'Updated address', deliveryWindowStart: null, deliveryWindowEnd: null });
+  put.flush({ message: 'Only pending orders can be edited' }, { status: 409, statusText: 'Conflict' });
+  http.expectOne('/api/v1/orders').flush([order]); http.expectOne('/api/v1/drivers').flush([driver]); http.expectOne('/api/v1/orders/27').flush(order);
+  assert.equal(component.newDestination(), 'Updated address'); assert.equal(component.showNewOrder(), true); assert.match(component.createError(), /Only pending/);
+  component.createOrder(); http.expectOne('/api/v1/orders/27').flush({ ...order, deliveryAddress: 'Updated address', deliveryWindowStart: null, deliveryWindowEnd: null });
+  assert.equal(component.selectedOrder().trackingNumber, 'SAR-TEST'); assert.equal(component.selectedOrder().destination, 'Updated address');
+  assert.equal(component.showNewOrder(), false); assert.match(component.toast(), /updated/);
+});
+
+test('cancellation requires confirmation, prevents duplicate requests and refreshes released capacity', () => {
+  startComponent(); component.selectOrder(27); http.expectOne('/api/v1/orders/27').flush({ ...order, driverId: 8 });
+  component.confirmCancellation(); http.expectNone('/api/v1/orders/27/status');
+  component.requestCancellation(); component.confirmCancellation(); component.confirmCancellation(); component.closeCancellation();
+  assert.notEqual(component.cancelOrderTarget(), null);
+  const patch = http.expectOne('/api/v1/orders/27/status'); assert.deepEqual(patch.request.body, { status: 'CANCELLED' });
+  const cancelled = { ...order, driverId: 8, status: 'CANCELLED' }; patch.flush(cancelled);
+  http.expectOne('/api/v1/orders').flush([cancelled]); http.expectOne('/api/v1/orders/27').flush(cancelled); http.expectOne('/api/v1/drivers').flush([driver]);
+  assert.equal(component.cancelling(), false); assert.equal(component.cancelOrderTarget(), null); assert.equal(component.selectedOrder().status, 'CANCELLED');
+  component.requestCancellation(); assert.equal(component.cancelOrderTarget(), null);
+  component.editOrder(); assert.equal(component.showNewOrder(), false); assert.equal(component.eligibleOrders().length, 0);
+});
+
+test('cancellation conflict retains the dialog and reconciles the selected order', () => {
+  startComponent(); component.selectOrder(27); http.expectOne('/api/v1/orders/27').flush({ ...order, driverId: 8 });
+  component.requestCancellation(); component.confirmCancellation();
+  http.expectOne('/api/v1/orders/27/status').flush({ message: 'Completed deliveries cannot be cancelled' }, { status: 409, statusText: 'Conflict' });
+  const delivered = { ...order, driverId: 8, status: 'DELIVERED' };
+  http.expectOne('/api/v1/orders').flush([delivered]); http.expectOne('/api/v1/orders/27').flush(delivered); http.expectOne('/api/v1/drivers').flush([driver]);
+  assert.match(component.cancelError(), /Completed/); assert.notEqual(component.cancelOrderTarget(), null); assert.equal(component.cancelling(), false);
+  component.closeCancellation(); component.requestCancellation(); assert.equal(component.cancelOrderTarget(), null);
+});
 
 test('driver creation requires a valid phone and rejects malformed profile fields', () => {
   startComponent(); component.openNewDriver(); component.driverName = 'Alex'; component.employeeCode = 'TEST-8';

@@ -9,5 +9,7 @@ public record OrderResponse(
     String pickupAddress,
     String deliveryAddress,
     OrderStatus status,
-    Long driverId
+    Long driverId,
+    java.time.Instant deliveryWindowStart,
+    java.time.Instant deliveryWindowEnd
 ) {}

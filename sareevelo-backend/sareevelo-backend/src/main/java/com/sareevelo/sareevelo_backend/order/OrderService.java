@@ -57,6 +57,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse createOrder(CreateOrderRequest request) {
+        validateWindow(request.deliveryWindowStart(), request.deliveryWindowEnd());
 
         String trackingNumber = request.trackingNumber() == null || request.trackingNumber().isBlank()
                 ? generateTrackingNumber() : request.trackingNumber().trim();
@@ -71,6 +72,8 @@ public class OrderService {
         order.setCustomerName(request.customerName().trim());
         order.setPickupAddress(request.pickupAddress().trim());
         order.setDeliveryAddress(request.deliveryAddress().trim());
+        order.setDeliveryWindowStart(request.deliveryWindowStart());
+        order.setDeliveryWindowEnd(request.deliveryWindowEnd());
 
         order.setStatus(OrderStatus.PENDING);
 
@@ -78,6 +81,31 @@ public class OrderService {
         recordEvent(savedOrder, ActivityEvent.Type.ORDER_CREATED, "Order created");
 
         return toResponse(savedOrder);
+    }
+
+    @Transactional
+    public OrderResponse updateOrder(Long id, com.sareevelo.sareevelo_backend.order.dto.UpdateOrderRequest request) {
+        validateWindow(request.deliveryWindowStart(), request.deliveryWindowEnd());
+        Order order = orderRepository.findForAssignment(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (order.getStatus() != OrderStatus.PENDING) throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Only pending orders can be edited. Refresh to see the latest delivery status.");
+        String customer = request.customerName().trim(), pickup = request.pickupAddress().trim(), delivery = request.deliveryAddress().trim();
+        boolean changed = !customer.equals(order.getCustomerName()) || !pickup.equals(order.getPickupAddress()) || !delivery.equals(order.getDeliveryAddress())
+                || !java.util.Objects.equals(request.deliveryWindowStart(), order.getDeliveryWindowStart())
+                || !java.util.Objects.equals(request.deliveryWindowEnd(), order.getDeliveryWindowEnd());
+        if (!changed) return toResponse(order);
+        order.setCustomerName(customer); order.setPickupAddress(pickup); order.setDeliveryAddress(delivery);
+        order.setDeliveryWindowStart(request.deliveryWindowStart()); order.setDeliveryWindowEnd(request.deliveryWindowEnd());
+        orderRepository.save(order);
+        recordEvent(order, ActivityEvent.Type.ORDER_UPDATED, "Order details or delivery window updated");
+        return toResponse(order);
+    }
+
+    private void validateWindow(java.time.Instant start, java.time.Instant end) {
+        if ((start == null) != (end == null) || (start != null && !end.isAfter(start))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provide both delivery window times, with the end after the start, or leave both empty.");
+        }
     }
 
     private String generateTrackingNumber() {
@@ -103,7 +131,7 @@ public class OrderService {
                 order.getPickupAddress(),
                 order.getDeliveryAddress(),
                 order.getStatus(),
-                order.getDriverId());
+                order.getDriverId(), order.getDeliveryWindowStart(), order.getDeliveryWindowEnd());
     }
 
     @Transactional
@@ -168,11 +196,24 @@ public class OrderService {
         // The order lock serializes retries and competing changes, including completion.
         if (current == target) return toResponse(order);
 
+        if (target == OrderStatus.CANCELLED) {
+            if (current == OrderStatus.DELIVERED) throw new ResponseStatusException(HttpStatus.CONFLICT, "Completed deliveries cannot be cancelled.");
+            if (order.getDriverId() != null) {
+                Driver driver = driverRepository.findForAssignment(order.getDriverId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Assigned driver no longer exists"));
+                releaseCapacity(driver);
+                driverRepository.save(driver);
+            }
+            order.setStatus(OrderStatus.CANCELLED); orderRepository.save(order);
+            recordEvent(order, ActivityEvent.Type.ORDER_CANCELLED, "Order cancelled" + (order.getDriverId() == null ? "" : "; one driver space released"));
+            return toResponse(order);
+        }
+
         boolean allowed = switch (current) {
             case PENDING -> target == OrderStatus.IN_TRANSIT;
             case IN_TRANSIT -> target == OrderStatus.DELAYED || target == OrderStatus.DELIVERED;
             case DELAYED -> target == OrderStatus.IN_TRANSIT || target == OrderStatus.DELIVERED;
-            case DELIVERED -> false;
+            case DELIVERED, CANCELLED -> false;
         };
         if (!allowed) throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Cannot change order status from " + current + " to " + target);
@@ -189,13 +230,7 @@ public class OrderService {
         ActivityEvent.Type type;
         String message;
         if (target == OrderStatus.DELIVERED) {
-            if (driver.getAvailableSpaces() >= driver.getCapacity()) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Driver capacity is inconsistent. Review the driver before completing this order.");
-            }
-            driver.setAvailableSpaces(driver.getAvailableSpaces() + 1);
-            if (driver.getAvailableSpaces() == driver.getCapacity() && driver.getStatus() != DriverStatus.OFFLINE) {
-                driver.setStatus(DriverStatus.AVAILABLE);
-            }
+            releaseCapacity(driver);
             type = ActivityEvent.Type.DELIVERY_COMPLETED;
             message = "Delivery completed; one driver space released";
         } else if (target == OrderStatus.DELAYED) {
@@ -211,6 +246,14 @@ public class OrderService {
         orderRepository.save(order);
         recordEvent(order, type, message);
         return toResponse(order);
+    }
+
+    private void releaseCapacity(Driver driver) {
+        if (driver.getAvailableSpaces() >= driver.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Driver capacity is inconsistent. Review the driver before closing this order.");
+        }
+        driver.setAvailableSpaces(driver.getAvailableSpaces() + 1);
+        if (driver.getAvailableSpaces() == driver.getCapacity() && driver.getStatus() != DriverStatus.OFFLINE) driver.setStatus(DriverStatus.AVAILABLE);
     }
 
     private void recordEvent(Order order, ActivityEvent.Type type, String message) {

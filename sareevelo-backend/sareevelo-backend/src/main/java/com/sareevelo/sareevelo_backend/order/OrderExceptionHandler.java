@@ -39,7 +39,12 @@ public class OrderExceptionHandler {
     ResponseEntity<ApiError> status(ResponseStatusException exception) {
         String message = exception.getReason() == null ? "The request could not be completed." : exception.getReason();
         return ResponseEntity.status(exception.getStatusCode()).body(new ApiError(
-                exception.getStatusCode().value() == 404 ? "ORDER_NOT_FOUND" : "ORDER_CONFLICT", message, Map.of()));
+                switch (exception.getStatusCode().value()) {
+                    case 400 -> "INVALID_REQUEST";
+                    case 404 -> "ORDER_NOT_FOUND";
+                    case 409 -> "ORDER_CONFLICT";
+                    default -> "REQUEST_FAILED";
+                }, message, Map.of()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -70,6 +70,24 @@ try {
   const createState = await request('/__test/state'); assert.equal(Object.hasOwn(createState.lastOrderCreate, 'trackingNumber'), false);
   assert.ok(component.toast().includes(generated.trackingNumber));
   console.log('PASS automatic tracking: no client number, generated response displayed and persisted');
+  component.editOrder(); component.newDestination.set('Updated destination');
+  // A past window intentionally exercises the independently calculated overdue indicator.
+  component.deliveryWindowStart = '2020-01-01T10:00'; component.deliveryWindowEnd = '2020-01-01T12:00';
+  component.createOrder(); await waitFor(() => !component.saving());
+  assert.equal(component.createError(), ''); assert.equal(component.selectedOrder().destination, 'Updated destination');
+  assert.equal(component.isOverdue(component.selectedOrder()), true);
+  component.openOperationalAlert('overdue'); assert.ok(component.visibleOrders().some(order => order.id === generated.id));
+  assert.equal(component.selectedOrder().status, 'PENDING');
+  component.assignmentDriverId = 8; component.assignDriver();
+  await waitFor(() => !component.assigning() && !component.loading() && !component.driversLoading() && !component.detailLoading());
+  assert.equal(component.drivers().find(driver => driver.id === 8).availableSpaces, 2);
+  component.requestCancellation(); component.confirmCancellation(); component.confirmCancellation();
+  await waitFor(() => !component.cancelling() && !component.loading() && !component.driversLoading() && !component.detailLoading());
+  assert.equal(component.cancelError(), ''); assert.equal(component.selectedOrder().status, 'CANCELLED');
+  assert.equal(component.drivers().find(driver => driver.id === 8).availableSpaces, 3);
+  assert.equal(component.isOverdue(component.selectedOrder()), false); assert.equal(component.visibleOrders().length, 0);
+  const cancelled = await request(`/api/v1/orders/${generated.id}`); assert.equal(cancelled.status, 'CANCELLED');
+  console.log('PASS scheduling and cancellation: edit persisted, overdue filter matched, capacity released and cancelled order excluded');
   component.ngOnDestroy(); component = undefined; TestBed.resetTestingModule();
   for (const mode of ['success', 'conflict', 'uncertain', 'timeout']) {
     await request('/__test/reset', { method: 'POST', body: JSON.stringify({ mode }) });

@@ -1,3 +1,4 @@
+import { OrderViewsComponent } from './orders/order-views.component';
 import { CommonModule } from '@angular/common';
 import { Component, computed, DestroyRef, inject, OnDestroy, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -15,6 +16,7 @@ import { IconComponent } from './shared/icon.component';
 import { OrderActivityComponent } from './orders/order-activity.component';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BulkAssignmentItem, BulkAssignmentResult, BulkAssignmentService } from './orders/bulk-assignment.service';
+import { ScheduleFilter, ScheduledOrder, matchesSchedule, overdue, dueToday, localDateTime, windowError } from './orders/order-schedule';
 
 type OrderFilter = 'ALL' | OrderStatus;
 type SortKey = 'id' | 'trackingNumber' | 'destination' | 'status';
@@ -23,7 +25,7 @@ type FormField = 'customerName' | 'pickupAddress' | 'deliveryAddress';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogDirective, IconComponent, OrderActivityComponent],
+  imports: [CommonModule, FormsModule, DialogDirective, IconComponent, OrderActivityComponent, OrderViewsComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
@@ -90,7 +92,28 @@ export class AppComponent implements OnDestroy {
       (!query || [driver.name, driver.employeeCode, driver.mobileNumber ?? '', driver.email ?? '', driver.vehicleRegistration ?? '', String(driver.id)].some(value => value.toLowerCase().includes(query))));
   });
   readonly driverOrders = computed(() => this.orders().filter(order => order.driverId === this.selectedDriverId()));
+  readonly orderView = signal<'table' | 'cards' | 'board'>('table');
+  readonly driverView = signal<'table' | 'cards'>('table');
+  readonly compactRows = signal(false);
+  readonly driverNames = computed(() => new Map(this.drivers().map(driver => [driver.id, driver.name])));
   readonly currentTab = signal('Overview');
+  readonly scheduleFilter = signal<ScheduleFilter>('ALL');
+  readonly scheduleFilters: { key: ScheduleFilter; label: string }[] = [{ key: 'ALL', label: 'Any date' }, { key: 'TODAY', label: 'Due today' }, { key: 'OVERDUE', label: 'Overdue' }, { key: 'UNSCHEDULED', label: 'Unscheduled' }];
+  readonly clockNow = signal(Date.now());
+  readonly activeFilterCount = computed(() => Number(!!this.query().trim()) + Number(this.filter() !== 'ALL') + Number(this.unassignedOnly()) + Number(this.scheduleFilter() !== 'ALL'));
+  readonly dueTodayCount = computed(() => this.orders().filter(order => dueToday(order, this.clockNow())).length);
+  reviewToday(): void { this.clearFilters(); this.setScheduleFilter('TODAY'); }
+  reviewDelayed(): void { this.clearFilters(); this.setFilter('DELAYED'); }
+  readonly localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  private clockTimer?: ReturnType<typeof setInterval>;
+  readonly editingOrderId = signal<number | null>(null);
+  readonly editingTracking = signal('');
+  deliveryWindowStart = '';
+  deliveryWindowEnd = '';
+  readonly scheduleError = signal('');
+  readonly cancelOrderTarget = signal<{ id: number; trackingNumber: string } | null>(null);
+  readonly cancelling = signal(false);
+  readonly cancelError = signal('');
   readonly filter = signal<OrderFilter>('ALL');
   readonly query = signal('');
   readonly sortKey = signal<SortKey>('id');
@@ -108,7 +131,7 @@ export class AppComponent implements OnDestroy {
   readonly filters: ReadonlyArray<{ key: OrderFilter; label: string }> = [
     { key: 'ALL', label: 'All' }, { key: 'PENDING', label: 'Pending' },
     { key: 'IN_TRANSIT', label: 'On the road' }, { key: 'DELAYED', label: 'Delayed' },
-    { key: 'DELIVERED', label: 'Delivered' }
+    { key: 'DELIVERED', label: 'Delivered' }, { key: 'CANCELLED', label: 'Cancelled' }
   ];
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -121,7 +144,7 @@ export class AppComponent implements OnDestroy {
   }));
   readonly visibleOrders = computed(() => this.orders().filter(order => {
     const q = this.query().toLowerCase().trim();
-    return (!this.unassignedOnly() || (order.status === 'PENDING' && order.driverId === null)) &&
+    return matchesSchedule(order, this.scheduleFilter(), this.clockNow()) && (!this.unassignedOnly() || (order.status === 'PENDING' && order.driverId === null)) &&
       (this.filter() === 'ALL' || order.status === this.filter()) &&
       (!q || [String(order.id), order.trackingNumber, order.customer, order.destination, order.pickupAddress]
         .some(value => value.toLowerCase().includes(q)));
@@ -140,8 +163,10 @@ export class AppComponent implements OnDestroy {
   readonly bulkDrivers = computed(() => this.availableDrivers().filter(driver => driver.availableSpaces >= this.bulkItems().length));
   readonly bulkSuccessCount = computed(() => this.bulkResults().filter(result => result.outcome === 'assigned').length);
   readonly operationalAlerts = computed(() => {
-    const alerts: { key: 'unassigned' | 'delayed' | 'capacity'; title: string; detail: string; action: string }[] = [];
+    const alerts: { key: 'unassigned' | 'delayed' | 'capacity' | 'overdue'; title: string; detail: string; action: string }[] = [];
     if (!this.loading() && !this.loadError()) {
+      const late = this.orders().filter(order => overdue(order, this.clockNow())).length;
+      if (late) alerts.push({ key: 'overdue', title: `${late} overdue deliveries`, detail: 'The delivery window has ended and these orders are still unfinished.', action: 'Review overdue' });
       if (this.summary().delayedOrders) alerts.push({ key: 'delayed', title: `${this.summary().delayedOrders} delayed deliveries`, detail: 'Review delivery progress and resolve exceptions.', action: 'Review delayed' });
       if (this.summary().unassigned) alerts.push({ key: 'unassigned', title: `${this.summary().unassigned} orders awaiting assignment`, detail: 'Select pending orders and assign them together.', action: 'Assign orders' });
     }
@@ -152,9 +177,10 @@ export class AppComponent implements OnDestroy {
     return alerts;
   });
 
-  openOperationalAlert(key: 'unassigned' | 'delayed' | 'capacity'): void {
+  openOperationalAlert(key: 'unassigned' | 'delayed' | 'capacity' | 'overdue'): void {
     if (key === 'capacity') { this.driverQuery.set(''); this.driverFilter.set('ALL'); this.setTab('Fleet'); return; }
     this.setTab('Deliveries'); this.query.set('');
+    if (key === 'overdue') { this.setScheduleFilter('OVERDUE'); return; }
     if (key === 'unassigned') this.showUnassigned(); else this.setFilter('DELAYED');
   }
 
@@ -172,7 +198,7 @@ export class AppComponent implements OnDestroy {
   clearOrderSelection(): void { if (!this.bulkAssigning()) this.checkedOrderIds.set(new Set()); }
 
   openBulkAssignment(): void {
-    if (!this.checkedOrders().length || this.loading() || this.loadError() || this.assigning() || this.statusChanging() || this.bulkAssigning()) return;
+    if (this.saving() || this.cancelling() || !this.checkedOrders().length || this.loading() || this.loadError() || this.assigning() || this.statusChanging() || this.bulkAssigning()) return;
     this.bulkItems.set(this.checkedOrders().map(({ id, trackingNumber }) => ({ id, trackingNumber })));
     this.bulkResults.set([]); this.bulkError.set(''); this.bulkFinished.set(false); this.bulkDriverId = null;
     this.showBulkAssignment.set(true); this.reloadDrivers();
@@ -181,7 +207,7 @@ export class AppComponent implements OnDestroy {
   closeBulkAssignment(): void { if (!this.bulkAssigning()) this.showBulkAssignment.set(false); }
 
   assignSelectedOrders(): void {
-    if (this.bulkAssigning() || this.bulkFinished() || this.assigning() || this.statusChanging()) return;
+    if (this.saving() || this.cancelling() || this.bulkAssigning() || this.bulkFinished() || this.assigning() || this.statusChanging()) return;
     const items = this.bulkItems();
     const driverId = this.bulkDriverId;
     if (this.loading() || this.loadError() || this.driversLoading() || this.driversError()) { this.bulkError.set('Wait for orders and driver availability to load successfully.'); return; }
@@ -199,11 +225,41 @@ export class AppComponent implements OnDestroy {
     });
   }
 
-  constructor() { this.store.load(); this.reloadDrivers(); }
+  constructor() {
+    this.store.load(); this.reloadDrivers();
+    if (typeof window !== 'undefined') this.clockTimer = setInterval(() => this.clockNow.set(Date.now()), 30000);
+  }
+  isOverdue(order: ScheduledOrder): boolean { return overdue(order, this.clockNow()); }
+  isDueToday(order: ScheduledOrder): boolean { return dueToday(order, this.clockNow()); }
+  setScheduleFilter(filter: ScheduleFilter): void { this.scheduleFilter.set(filter); this.clockNow.set(Date.now()); }
+
+  editOrder(): void {
+    const order = this.selectedOrder();
+    if (!order || order.status !== 'PENDING' || this.saving() || this.assigning() || this.statusChanging() || this.bulkAssigning() || this.cancelling()) return;
+    this.editingOrderId.set(order.id); this.editingTracking.set(order.trackingNumber);
+    this.newCustomer.set(order.customer); this.newPickupAddress.set(order.pickupAddress); this.newDestination.set(order.destination);
+    this.deliveryWindowStart = localDateTime(order.deliveryWindowStart); this.deliveryWindowEnd = localDateTime(order.deliveryWindowEnd);
+    this.createError.set(''); this.scheduleError.set(''); this.fieldErrors.set({}); this.submitted.set(false); this.showNewOrder.set(true);
+  }
+  requestCancellation(): void {
+    const order = this.selectedOrder();
+    if (!order || order.status === 'DELIVERED' || order.status === 'CANCELLED' || this.statusChanging() || this.assigning() || this.bulkAssigning() || this.saving()) return;
+    this.cancelError.set(''); this.cancelOrderTarget.set({ id: order.id, trackingNumber: order.trackingNumber });
+  }
+  closeCancellation(): void { if (!this.cancelling()) this.cancelOrderTarget.set(null); }
+  confirmCancellation(): void {
+    const target = this.cancelOrderTarget();
+    if (!target || this.cancelling() || this.assigning() || this.statusChanging() || this.bulkAssigning() || this.saving()) return;
+    this.cancelling.set(true); this.cancelError.set('');
+    this.orderApi.updateStatus(target.id, { status: 'CANCELLED' }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.cancelling.set(false))).subscribe({
+      next: () => { this.cancelOrderTarget.set(null); this.refreshWorkspace(); this.notify(`${target.trackingNumber} cancelled`); },
+      error: error => { this.cancelError.set(orderErrorMessage(error)); this.refreshWorkspace(); }
+    });
+  }
 
   updateOrderStatus(status: OrderStatus): void {
     const order = this.selectedOrder();
-    if (!order || this.statusChanging() || this.assigning() || this.bulkAssigning()) return;
+    if (!order || this.statusChanging() || this.assigning() || this.bulkAssigning() || this.cancelling() || this.saving()) return;
     this.statusChanging.set(true); this.statusError.set('');
     this.orderApi.updateStatus(order.id, { status }).pipe(
       takeUntilDestroyed(this.destroyRef), finalize(() => this.statusChanging.set(false))
@@ -263,7 +319,7 @@ export class AppComponent implements OnDestroy {
     this.driverCreateError.set(''); this.showNewDriver.set(true);
   }
   vehicleLabel(type: VehicleType | null): string { return this.vehicleTypes.find(item => item.value === type)?.label ?? 'Not specified'; }
-  showUnassigned(): void { this.query.set(''); this.filter.set('ALL'); this.unassignedOnly.set(true); }
+  showUnassigned(): void { this.query.set(''); this.filter.set('ALL'); this.scheduleFilter.set('ALL'); this.unassignedOnly.set(true); }
   viewDriver(id: number): void { this.setTab('Fleet'); this.selectDriver(id); }
   viewDriverOrder(id: number): void { this.setTab('Deliveries'); this.selectOrder(id); }
   driverStatusLabel(status: Driver['status']): string {
@@ -327,7 +383,7 @@ export class AppComponent implements OnDestroy {
   assignDriver(): void {
     const order = this.selectedOrder();
     const driverId = this.assignmentDriverId;
-    if (this.bulkAssigning() || this.assigning() || this.statusChanging() || !order || order.driverId !== null || order.status !== 'PENDING' || driverId === null) return;
+    if (this.cancelling() || this.saving() || this.bulkAssigning() || this.assigning() || this.statusChanging() || !order || order.driverId !== null || order.status !== 'PENDING' || driverId === null) return;
     this.assigning.set(true); this.assignError.set('');
     this.orderApi.assignDriver(order.id, { driverId }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.assigning.set(false))).subscribe({
       next: () => {
@@ -348,6 +404,7 @@ export class AppComponent implements OnDestroy {
 
   reloadOrders(): void { this.store.load(); }
   setTab(tab: string): void {
+    this.scheduleFilter.set('ALL');
     this.currentTab.set(tab);
     if (tab === 'Fleet') {
       this.reloadDrivers();
@@ -363,11 +420,16 @@ export class AppComponent implements OnDestroy {
     const id = this.selectedOrderId();
     if (id !== null) this.store.select(id);
   }
-  openNewOrder(): void { this.closeDetails(); this.createError.set(''); this.fieldErrors.set({}); this.submitted.set(false); this.showNewOrder.set(true); }
+  openNewOrder(): void {
+    if (this.editingOrderId() !== null) { this.newCustomer.set(''); this.newPickupAddress.set(''); this.newDestination.set(''); this.deliveryWindowStart = ''; this.deliveryWindowEnd = ''; }
+    this.editingOrderId.set(null); this.editingTracking.set(''); this.scheduleError.set('');
+    this.closeDetails(); this.createError.set(''); this.fieldErrors.set({}); this.submitted.set(false); this.showNewOrder.set(true);
+  }
   closeNewOrder(): void { if (!this.saving()) this.showNewOrder.set(false); }
 
   createOrder(): void {
-    if (this.saving()) return;
+    if (this.saving() || this.cancelling() || this.assigning() || this.statusChanging() || this.bulkAssigning()) return;
+    const editingId = this.editingOrderId();
     this.submitted.set(true);
     const request = {
       customerName: this.newCustomer().trim(),
@@ -384,20 +446,28 @@ export class AppComponent implements OnDestroy {
     }
     this.fieldErrors.set(errors);
     if (Object.keys(errors).length) return;
+    const scheduleError = windowError(this.deliveryWindowStart, this.deliveryWindowEnd);
+    this.scheduleError.set(scheduleError);
+    if (scheduleError) return;
+    const payload = { ...request, ...((this.deliveryWindowStart || editingId !== null) ? {
+      deliveryWindowStart: this.deliveryWindowStart ? new Date(this.deliveryWindowStart).toISOString() : null,
+      deliveryWindowEnd: this.deliveryWindowEnd ? new Date(this.deliveryWindowEnd).toISOString() : null
+    } : {}) };
     this.saving.set(true);
     this.createError.set('');
-    this.store.create(request).pipe(
+    (editingId === null ? this.store.create(payload) : this.store.update(editingId, payload)).pipe(
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.saving.set(false))
     ).subscribe({
       next: order => {
         this.filter.set('ALL'); this.query.set(''); this.sortKey.set('id'); this.sortDirection.set('desc');
         this.unassignedOnly.set(false);
+        this.scheduleFilter.set('ALL'); this.deliveryWindowStart = ''; this.deliveryWindowEnd = '';
         this.currentTab.set('Deliveries');
         this.newCustomer.set('');
         this.newPickupAddress.set(''); this.newDestination.set('');
         this.showNewOrder.set(false);
-        this.notify(`Delivery ${order.trackingNumber} created`);
+        this.notify(`Delivery ${order.trackingNumber} ${editingId === null ? 'created' : 'updated'}`);
       },
       error: (error: unknown) => {
         this.createError.set(orderErrorMessage(error));
@@ -414,7 +484,8 @@ export class AppComponent implements OnDestroy {
             }
             this.fieldErrors.set(messages);
           }
-          if (error.status === 409) this.createError.set('The generated tracking number could not be saved. Please try creating the delivery again.');
+          if (error.status === 409 && editingId === null) this.createError.set('The generated tracking number could not be saved. Please try creating the delivery again.');
+          if (editingId !== null && (error.status === 404 || error.status === 409)) this.refreshWorkspace();
         }
       }
     });
@@ -428,7 +499,7 @@ export class AppComponent implements OnDestroy {
     return this.sortKey() !== key ? 'none' : this.sortDirection() === 'asc' ? 'ascending' : 'descending';
   }
   filterCount(key: OrderFilter): number { return key === 'ALL' ? this.orders().length : this.orders().filter(order => order.status === key).length; }
-  clearFilters(): void { this.query.set(''); this.filter.set('ALL'); this.unassignedOnly.set(false); }
+  clearFilters(): void { this.query.set(''); this.filter.set('ALL'); this.unassignedOnly.set(false); this.scheduleFilter.set('ALL'); }
   editField(field: FormField, value: string): void {
     const targets = { customerName: this.newCustomer, pickupAddress: this.newPickupAddress, deliveryAddress: this.newDestination };
     targets[field].set(value);
@@ -448,7 +519,7 @@ export class AppComponent implements OnDestroy {
     this.toastTimer = setTimeout(() => this.toast.set(''), 4000);
   }
   statusLabel(status: OrderStatus): string {
-    return ({ PENDING: 'Pending', IN_TRANSIT: 'In transit', DELIVERED: 'Delivered', DELAYED: 'Delayed' } as const)[status];
+    return ({ PENDING: 'Pending', IN_TRANSIT: 'In transit', DELIVERED: 'Delivered', DELAYED: 'Delayed', CANCELLED: 'Cancelled' } as const)[status];
   }
-  ngOnDestroy(): void { this.bulkRequest?.unsubscribe(); if (this.toastTimer) clearTimeout(this.toastTimer); }
+  ngOnDestroy(): void { this.bulkRequest?.unsubscribe(); if (this.clockTimer) clearInterval(this.clockTimer); if (this.toastTimer) clearTimeout(this.toastTimer); }
 }

@@ -31,6 +31,14 @@ public class Order {
     @Column(name = "driver_id")
     private Long driverId;
 
+    private java.time.Instant deliveryWindowStart;
+    private java.time.Instant deliveryWindowEnd;
+
+    public java.time.Instant getDeliveryWindowStart() { return deliveryWindowStart; }
+    public void setDeliveryWindowStart(java.time.Instant value) { deliveryWindowStart = value; }
+    public java.time.Instant getDeliveryWindowEnd() { return deliveryWindowEnd; }
+    public void setDeliveryWindowEnd(java.time.Instant value) { deliveryWindowEnd = value; }
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

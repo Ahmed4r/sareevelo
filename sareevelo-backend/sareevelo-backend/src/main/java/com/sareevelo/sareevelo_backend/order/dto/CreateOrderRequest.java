@@ -8,5 +8,11 @@ public record CreateOrderRequest(
     @Size(max = 50) String trackingNumber,
     @NotBlank @Size(max = 150) String customerName,
     @NotBlank @Size(max = 255) String pickupAddress,
-    @NotBlank @Size(max = 255) String deliveryAddress
-) {}
+    @NotBlank @Size(max = 255) String deliveryAddress,
+    java.time.Instant deliveryWindowStart,
+    java.time.Instant deliveryWindowEnd
+) {
+    public CreateOrderRequest(String trackingNumber, String customerName, String pickupAddress, String deliveryAddress) {
+        this(trackingNumber, customerName, pickupAddress, deliveryAddress, null, null);
+    }
+}

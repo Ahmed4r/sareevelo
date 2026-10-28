@@ -9,6 +9,7 @@ export function orderErrorMessage(error: unknown): string {
     return 'Cannot reach the logistics service. Check that the backend is running and try again.';
   }
   if (error.status === 404) return 'The requested order or driver no longer exists. Refresh and try again.';
+  if (error.status === 405) return 'The running logistics service does not support this action. Restart the backend with the latest application version, then try again. Your form values have been kept.';
   if (error.status >= 500) return 'The logistics service could not complete the request. Please try again.';
   const body: unknown = error.error;
   if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {

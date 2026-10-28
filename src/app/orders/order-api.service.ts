@@ -21,6 +21,10 @@ export class OrderApiService {
     return this.http.post<OrderResponse>(this.url, request);
   }
 
+  updateOrder(id: number, request: CreateOrderRequest): Observable<OrderResponse> {
+    return this.http.put<OrderResponse>(`${this.url}/${id}`, request);
+  }
+
   assignDriver(id: number, request: AssignDriverRequest): Observable<OrderResponse> {
     return this.http.post<OrderResponse>(`${this.url}/${id}/assign`, request);
   }

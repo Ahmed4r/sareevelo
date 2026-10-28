@@ -4,13 +4,15 @@ export interface UpdateOrderStatusRequest { status: OrderStatus; }
 export interface OrderActivity {
   id: number;
   orderId: number;
-  type: 'ORDER_CREATED' | 'DRIVER_ASSIGNED' | 'DELIVERY_STARTED' | 'DELIVERY_DELAYED' | 'DELIVERY_RESUMED' | 'DELIVERY_COMPLETED';
+  type: 'ORDER_CREATED' | 'DRIVER_ASSIGNED' | 'DELIVERY_STARTED' | 'DELIVERY_DELAYED' | 'DELIVERY_RESUMED' | 'DELIVERY_COMPLETED' | 'ORDER_UPDATED' | 'ORDER_CANCELLED';
   message: string;
   timestamp: string;
 }
 
 /** Exact public DTO returned by the Spring OrderController. */
 export interface OrderResponse {
+  deliveryWindowStart?: string | null;
+  deliveryWindowEnd?: string | null;
   id: number;
   trackingNumber: string;
   customerName: string;
@@ -21,6 +23,8 @@ export interface OrderResponse {
 }
 
 export interface CreateOrderRequest {
+  deliveryWindowStart?: string | null;
+  deliveryWindowEnd?: string | null;
   customerName: string;
   pickupAddress: string;
   deliveryAddress: string;
@@ -28,6 +32,8 @@ export interface CreateOrderRequest {
 
 /** Presentation names used by the existing dispatch UI. */
 export interface OrderView {
+  deliveryWindowStart: string | null;
+  deliveryWindowEnd: string | null;
   id: number;
   trackingNumber: string;
   customer: string;
@@ -39,6 +45,8 @@ export interface OrderView {
 
 export function toOrderView(order: OrderResponse): OrderView {
   return {
+    deliveryWindowStart: order.deliveryWindowStart ?? null,
+    deliveryWindowEnd: order.deliveryWindowEnd ?? null,
     id: order.id,
     trackingNumber: order.trackingNumber,
     customer: order.customerName,

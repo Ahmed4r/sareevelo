@@ -70,6 +70,31 @@ class DeliveryConcurrencyTests {
         } finally { cleanup(orderId, driverId); }
     }
 
+    @Test void concurrentCancellationAndCompletionReleaseOnlyOneSpace() throws Exception {
+        for (OrderStatus secondTarget : new OrderStatus[]{OrderStatus.CANCELLED, OrderStatus.DELIVERED}) {
+            Long driverId = null, orderId = null;
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                driverId = drivers.createDriver(new CreateDriverRequest("Cancellation race", "TEST-" + UUID.randomUUID(), 1, "+4915123456789", null, null, null, null)).id();
+                orderId = orders.createOrder(new CreateOrderRequest(null, "Cancellation race", "Pickup", "Delivery")).id();
+                orders.assignDriver(orderId, new AssignDriverRequest(driverId)); orders.updateStatus(orderId, new UpdateOrderStatusRequest(OrderStatus.IN_TRANSIT));
+                Long id = orderId; CountDownLatch ready = new CountDownLatch(2), start = new CountDownLatch(1);
+                java.util.function.Function<OrderStatus, Callable<Integer>> task = target -> () -> {
+                    ready.countDown(); if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
+                    try { orders.updateStatus(id, new UpdateOrderStatusRequest(target)); return 200; }
+                    catch (org.springframework.web.server.ResponseStatusException error) { return error.getStatusCode().value(); }
+                };
+                Future<Integer> first = executor.submit(task.apply(OrderStatus.CANCELLED)), second = executor.submit(task.apply(secondTarget));
+                assertTrue(ready.await(10, TimeUnit.SECONDS)); start.countDown();
+                int one = first.get(15, TimeUnit.SECONDS), two = second.get(15, TimeUnit.SECONDS);
+                if (secondTarget == OrderStatus.CANCELLED) { assertEquals(200, one); assertEquals(200, two); }
+                else assertTrue((one == 200 && two == 409) || (one == 409 && two == 200));
+                assertEquals(1, drivers.getDriverById(driverId).availableSpaces());
+                assertEquals(1L, activity.findByOrderIdOrderByIdDesc(id).stream().filter(event -> event.getType() == ActivityEvent.Type.ORDER_CANCELLED || event.getType() == ActivityEvent.Type.DELIVERY_COMPLETED).count());
+            } finally { executor.shutdownNow(); executor.awaitTermination(20, TimeUnit.SECONDS); cleanup(orderId, driverId); }
+        }
+    }
+
     private void cleanup(Long orderId, Long driverId) {
         new TransactionTemplate(transactions).executeWithoutResult(tx -> {
             if (orderId != null) { activity.deleteByOrderId(orderId); orderRepository.deleteById(orderId); }

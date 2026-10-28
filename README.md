@@ -125,11 +125,9 @@ npm run test:bulk-http
 
 Stop the simulation with Ctrl+C. Fixtures and test-only controls live under `postman/`; production API configuration is untouched. See `postman/simulations/sareevelo-bulk-assignment.context.md` for the verified assumptions and limits.
 
-## Driver profiles and themes
-
 ## Automatic order tracking
 
-The New delivery form accepts customer, pickup address and delivery address only. Its tracking-number notice explains that the server generates the number on save. The generated number appears in the success notification, manifest and selected order details.
+The New delivery form accepts customer, pickup address, delivery address and an optional delivery window. Its tracking-number notice explains that the server generates the number on save. The generated number appears in the success notification, manifest and selected order details.
 
 `POST /api/v1/orders` now permits omitted, null or blank `trackingNumber`; Spring generates a `SAR-XXXX-XXXX-XXXX-XXXX` reference using 16 secure random symbols. Existing tracking numbers and optional manual numbers from older API clients remain supported. The database's unique constraint remains the final safeguard across simultaneous requests; existing candidates are regenerated before insertion. Creation has no automatic retries on uncertain network failures.
 
@@ -146,3 +144,19 @@ The database extension is additive. The configured development `ddl-auto=update`
 Light mode is the default. The header toggle switches to dark mode and saves the preference locally; the preference is applied before Angular starts to avoid a theme flash. Shared tokens cover forms, dialogs, alerts, status indicators, activity history, and the application shell. The toggle also works when browser storage is disabled.
 
 Verification for this change: 32 frontend tests, 20 backend tests against the configured PostgreSQL database, the production build, and five HTTP simulation flows pass. Profile tests cover normalized persistence, legacy records, validation failures, optional-field clearing and unchanged operational state. Browser rendering and click-through checks remain unverified because no browser connection was available.
+
+## Workspace views and controls
+
+Use the manifest's Table, Cards and Board controls to change presentation without losing filters or bulk selections. The board groups the filtered orders by status; open an order to use the existing lifecycle controls. It does not change statuses by dragging cards. Sorting and direction apply across all order views. Driver cards show real capacity and contact links. Table density and the collapsible dispatch welcome provide more working space. View preferences last for the current session.
+
+The transparent route illustration in `public/brand/dispatch-route.svg` uses a 720 × 480 viewBox and responsive containment. Shared SVG icons stay sharp at any pixel density. Both themes use the existing semantic colors; board columns stack on narrow screens. Forty frontend tests and the production build pass. Browser visual verification remains unavailable in this session.
+
+## Delivery scheduling, editing and cancellation
+
+Orders accept an optional delivery window. Both endpoints must be provided together, with the end after the start. The form displays the browser timezone; the API stores instants. Due today uses the window end in that timezone. Overdue indicators refresh every 30 seconds and exclude delivered and cancelled orders. These filters remain separate from the manually recorded delayed status.
+
+Pending orders can be edited without changing their tracking number, assigned driver or reserved capacity. Clearing the window removes scheduling. Unfinished orders can be cancelled through a confirmation dialog. Cancellation retains the order and activity history and releases reserved capacity exactly once, including concurrent cancellation/completion requests. Delivered and cancelled orders cannot reopen.
+
+For existing databases, apply `sareevelo-backend/sareevelo-backend/db/order-scheduling.sql` before restarting the updated backend. It adds nullable window columns and extends status/activity constraints without deleting records. This migration has been applied to the configured local database. The scoped API contract is `postman/specs/order-workflows.openapi.yaml`.
+
+Verification: 38 frontend tests, 28 backend tests against PostgreSQL, seven local HTTP simulation flows, and the production Angular build pass. Tests cover schedule validation, persistence, filters, edit conflicts, cancellation, capacity release and concurrent terminal transitions. Browser rendering and click-through checks remain unverified because no browser connection was available.
