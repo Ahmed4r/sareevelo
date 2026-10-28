@@ -518,7 +518,19 @@ export class AppComponent implements OnDestroy {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.toast.set(''), 4000);
   }
-  statusLabel(status: OrderStatus): string {
+  copyTracking(trackingNumber: string): void {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(trackingNumber).then(() => {
+        this.notify(`Tracking ${trackingNumber} copied`);
+      }).catch(() => {
+        this.notify(`Tracking: ${trackingNumber}`);
+      });
+    } else {
+      this.notify(`Tracking: ${trackingNumber}`);
+    }
+  }
+  statusLabel(status: OrderStatus | 'ALL'): string {
+    if (status === 'ALL') return 'All';
     return ({ PENDING: 'Pending', IN_TRANSIT: 'In transit', DELIVERED: 'Delivered', DELAYED: 'Delayed', CANCELLED: 'Cancelled' } as const)[status];
   }
   ngOnDestroy(): void { this.bulkRequest?.unsubscribe(); if (this.clockTimer) clearInterval(this.clockTimer); if (this.toastTimer) clearTimeout(this.toastTimer); }

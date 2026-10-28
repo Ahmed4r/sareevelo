@@ -24,10 +24,26 @@
 
       @if(currentTab() === 'Overview') {
         <section id="dispatch-workload" class="operations-strip" aria-label="Dispatch workload">
-          <button class="workload primary-workload" (click)="showUnassigned()" [disabled]="loading() || !!loadError()"><span>Awaiting assignment</span><strong>{{loading() || loadError() ? '—' : summary().unassigned}}</strong><small>Review pending orders <app-icon name="arrow"/></small></button>
-          <button class="workload" (click)="reviewToday()" [disabled]="loading() || !!loadError()"><span>Due today</span><strong>{{loading() || loadError() ? '—' : dueTodayCount()}}</strong><small>Review today's deliveries <app-icon name="arrow"/></small></button>
-          <button class="workload" (click)="openOperationalAlert('capacity')" [disabled]="driversLoading() || !!driversError()"><span>Available capacity</span><strong>{{driversLoading() || driversError() ? '—' : summary().spaces}}<em>spaces</em></strong><small>{{driversLoading() || driversError() ? 'Driver capacity unavailable' : summary().availableDrivers + ' drivers with room'}}</small></button>
-          <button class="workload" [class.has-exceptions]="summary().delayedOrders > 0" (click)="reviewDelayed()" [disabled]="loading() || !!loadError()"><span>Delayed orders</span><strong>{{loading() || loadError() ? '—' : summary().delayedOrders}}</strong><small>Review exceptions <app-icon name="arrow"/></small></button>
+          <button class="workload primary-workload" (click)="showUnassigned()" [disabled]="loading() || !!loadError()">
+            <div class="workload-header"><app-icon name="dispatch"/><span>Awaiting assignment</span></div>
+            <strong>{{loading() || loadError() ? '—' : summary().unassigned}}</strong>
+            <small>Review pending orders <app-icon name="arrow"/></small>
+          </button>
+          <button class="workload" (click)="reviewToday()" [disabled]="loading() || !!loadError()">
+            <div class="workload-header"><app-icon name="history"/><span>Due today</span></div>
+            <strong>{{loading() || loadError() ? '—' : dueTodayCount()}}</strong>
+            <small>Review today's deliveries <app-icon name="arrow"/></small>
+          </button>
+          <button class="workload" (click)="openOperationalAlert('capacity')" [disabled]="driversLoading() || !!driversError()">
+            <div class="workload-header"><app-icon name="capacity"/><span>Available capacity</span></div>
+            <strong>{{driversLoading() || driversError() ? '—' : summary().spaces}}<em>spaces</em></strong>
+            <small>{{driversLoading() || driversError() ? 'Driver capacity unavailable' : summary().availableDrivers + ' drivers with room'}} <app-icon name="arrow"/></small>
+          </button>
+          <button class="workload" [class.has-exceptions]="summary().delayedOrders > 0" (click)="reviewDelayed()" [disabled]="loading() || !!loadError()">
+            <div class="workload-header"><app-icon name="alert"/><span>Delayed orders</span></div>
+            <strong>{{loading() || loadError() ? '—' : summary().delayedOrders}}</strong>
+            <small>Review exceptions <app-icon name="arrow"/></small>
+          </button>
         </section>
         <section class="operational-alerts" aria-labelledby="alerts-title">
           <div class="alerts-heading"><h2 id="alerts-title">Needs your attention</h2><span class="attention-caption">Resolve exceptions, then assign the queue</span></div>
@@ -42,20 +58,63 @@
       <div class="work-area" [class.compact-rows]="compactRows()">
         <section class="records-panel" [attr.aria-label]="currentTab() === 'Fleet' ? 'Driver roster' : 'Delivery manifest'">
           <div class="panel-heading"><div><h2>{{currentTab() === 'Fleet' ? 'Driver roster' : 'Delivery manifest'}}</h2><span class="count-badge">{{currentTab() === 'Fleet' ? (driversLoading() || driversError() ? '—' : drivers().length) : (loading() || loadError() ? '—' : orders().length)}}</span></div><span class="panel-caption">{{currentTab() === 'Fleet' ? 'Team & capacity' : 'All saved orders'}}</span></div>
-<details class="view-settings"><summary><app-icon name="grid"/>View options <span>{{currentTab() === 'Fleet' ? driverView() : orderView()}}</span></summary><div class="view-controls" aria-label="Workspace view controls">
+          <div class="view-controls" aria-label="Workspace view controls">
             <div class="view-switch" role="group" aria-label="Record view">
-              <button [class.selected]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'" [attr.aria-pressed]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'" (click)="currentTab() === 'Fleet' ? driverView.set('table') : orderView.set('table')"><app-icon name="list"/>Table</button>
-              <button [class.selected]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'cards'" [attr.aria-pressed]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'cards'" (click)="currentTab() === 'Fleet' ? driverView.set('cards') : orderView.set('cards')"><app-icon name="grid"/>Cards</button>
-              @if(currentTab() !== 'Fleet'){<button [class.selected]="orderView() === 'board'" [attr.aria-pressed]="orderView() === 'board'" (click)="orderView.set('board')"><app-icon name="board"/>Board</button>}
+              <button [class.selected]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'" [attr.aria-pressed]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'" (click)="currentTab() === 'Fleet' ? driverView.set('table') : orderView.set('table')"><app-icon name="list"/><span>Table</span></button>
+              <button [class.selected]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'cards'" [attr.aria-pressed]="(currentTab() === 'Fleet' ? driverView() : orderView()) === 'cards'" (click)="currentTab() === 'Fleet' ? driverView.set('cards') : orderView.set('cards')"><app-icon name="grid"/><span>Cards</span></button>
+              @if(currentTab() !== 'Fleet'){<button [class.selected]="orderView() === 'board'" [attr.aria-pressed]="orderView() === 'board'" (click)="orderView.set('board')"><app-icon name="board"/><span>Board</span></button>}
             </div>
-            @if(currentTab() !== 'Fleet'){<label class="sort-control">Sort <select aria-label="Sort orders" [ngModel]="sortKey()" (ngModelChange)="sortKey.set($event)"><option value="id">Order ID</option><option value="trackingNumber">Tracking number</option><option value="destination">Destination</option><option value="status">Status</option></select></label><button class="view-option" (click)="sortDirection.set(sortDirection() === 'asc' ? 'desc' : 'asc')" [attr.aria-label]="sortDirection() === 'asc' ? 'Sort descending' : 'Sort ascending'"><app-icon name="sort"/>{{sortDirection() === 'asc' ? 'Ascending' : 'Descending'}}</button>}
-            @if((currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'){<button class="view-option" [attr.aria-pressed]="compactRows()" (click)="compactRows.set(!compactRows())"><app-icon name="density"/>{{compactRows() ? 'Compact rows' : 'Comfortable rows'}}</button>}
-          </div></details>
+            @if(currentTab() !== 'Fleet'){
+              <div class="sort-controls-group">
+                <label class="sort-control"><span>Sort</span><select aria-label="Sort orders" [ngModel]="sortKey()" (ngModelChange)="sortKey.set($event)"><option value="id">Order ID</option><option value="trackingNumber">Tracking number</option><option value="destination">Destination</option><option value="status">Status</option></select></label>
+                <button class="view-option sort-direction-btn" (click)="sortDirection.set(sortDirection() === 'asc' ? 'desc' : 'asc')" [attr.aria-label]="sortDirection() === 'asc' ? 'Sort descending' : 'Sort ascending'" [title]="sortDirection() === 'asc' ? 'Ascending (click for descending)' : 'Descending (click for ascending)'"><app-icon name="sort"/><span>{{sortDirection() === 'asc' ? 'Asc' : 'Desc'}}</span></button>
+              </div>
+            }
+            @if((currentTab() === 'Fleet' ? driverView() : orderView()) === 'table'){
+              <button class="view-option density-btn" [attr.aria-pressed]="compactRows()" (click)="compactRows.set(!compactRows())" [title]="compactRows() ? 'Switch to comfortable spacing' : 'Switch to compact spacing'"><app-icon name="density"/><span>{{compactRows() ? 'Compact' : 'Comfortable'}}</span></button>
+            }
+          </div>
           @if(currentTab() !== 'Fleet') {
 
-            <div class="table-toolbar"><label class="search-field"><app-icon name="search"/><input type="search" placeholder="Search tracking, customer or address" aria-label="Search orders" [ngModel]="query()" (ngModelChange)="query.set($event)"></label><button class="filter-toggle" [class.selected]="unassignedOnly()" [attr.aria-pressed]="unassignedOnly()" (click)="unassignedOnly.set(!unassignedOnly())">Unassigned</button></div>
-            <div class="schedule-filters" aria-label="Delivery schedule filters"><span class="field-label">Delivery schedule</span>@for(item of scheduleFilters; track item.key){<button class="filter-toggle" [class.selected]="scheduleFilter() === item.key" [attr.aria-pressed]="scheduleFilter() === item.key" (click)="setScheduleFilter(item.key)">{{item.label}}</button>}<small>Times in {{localTimeZone}}</small></div><div class="status-tabs" aria-label="Order status filters">@for(item of filters; track item.key){<button [class.selected]="filter() === item.key && !unassignedOnly()" [attr.aria-pressed]="filter() === item.key && !unassignedOnly()" (click)="setFilter(item.key)">{{item.label}}<span>{{loading() || loadError() ? '—' : filterCount(item.key)}}</span></button>}</div>
-            @if(activeFilterCount()) {<div class="active-filters" aria-label="Active order filters"><span>{{visibleOrders().length}} matches</span>@if(query().trim()){<button (click)="query.set('')" aria-label="Remove search filter">Search: {{query()}} <app-icon name="close"/></button>}@if(unassignedOnly()){<button (click)="unassignedOnly.set(false)">Unassigned <app-icon name="close"/></button>}@if(filter() !== 'ALL'){<button (click)="setFilter('ALL')">{{statusLabel(filter())}} <app-icon name="close"/></button>}@if(scheduleFilter() !== 'ALL'){<button (click)="setScheduleFilter('ALL')">{{scheduleFilter() === 'TODAY' ? 'Due today' : scheduleFilter() === 'OVERDUE' ? 'Overdue' : 'Unscheduled'}} <app-icon name="close"/></button>}<button class="clear-filters" (click)="clearFilters()">Clear all filters</button></div>}
+            <div class="table-toolbar">
+              <label class="search-field">
+                <app-icon name="search"/>
+                <input type="search" placeholder="Search tracking, customer or address" aria-label="Search orders" [ngModel]="query()" (ngModelChange)="query.set($event)">
+                @if(query().trim()){
+                  <button type="button" class="search-clear-btn" (click)="query.set('')" aria-label="Clear search input">
+                    <app-icon name="close"/>
+                  </button>
+                }
+              </label>
+              <button class="filter-toggle" [class.selected]="unassignedOnly()" [attr.aria-pressed]="unassignedOnly()" (click)="unassignedOnly.set(!unassignedOnly())">Unassigned</button>
+            </div>
+            <div class="schedule-filters" aria-label="Delivery schedule filters">
+              <span class="field-label">Delivery schedule</span>
+              @for(item of scheduleFilters; track item.key){
+                <button class="filter-toggle" [class.selected]="scheduleFilter() === item.key" [attr.aria-pressed]="scheduleFilter() === item.key" (click)="setScheduleFilter(item.key)">{{item.label}}</button>
+              }
+              <small>Times in {{localTimeZone}}</small>
+            </div>
+            <div class="status-tabs" aria-label="Order status filters">
+              @for(item of filters; track item.key){
+                <button [class.selected]="filter() === item.key && !unassignedOnly()" [attr.aria-pressed]="filter() === item.key && !unassignedOnly()" (click)="setFilter(item.key)">
+                  {{item.label}}
+                  <span class="status-pill">{{loading() || loadError() ? '—' : filterCount(item.key)}}</span>
+                </button>
+              }
+            </div>
+            @if(activeFilterCount()) {
+              <div class="active-filters" aria-label="Active order filters">
+                <span class="active-filters-count">{{visibleOrders().length}} {{visibleOrders().length === 1 ? 'match' : 'matches'}}</span>
+                <div class="filter-chips">
+                  @if(query().trim()){<button class="filter-chip" (click)="query.set('')" aria-label="Remove search filter">Search: <strong>{{query()}}</strong> <app-icon name="close"/></button>}
+                  @if(unassignedOnly()){<button class="filter-chip" (click)="unassignedOnly.set(false)" aria-label="Remove unassigned filter"><strong>Unassigned</strong> <app-icon name="close"/></button>}
+                  @if(filter() !== 'ALL'){<button class="filter-chip" (click)="setFilter('ALL')" aria-label="Remove status filter">{{statusLabel(filter())}} <app-icon name="close"/></button>}
+                  @if(scheduleFilter() !== 'ALL'){<button class="filter-chip" (click)="setScheduleFilter('ALL')" aria-label="Remove schedule filter">{{scheduleFilter() === 'TODAY' ? 'Due today' : scheduleFilter() === 'OVERDUE' ? 'Overdue' : 'Unscheduled'}} <app-icon name="close"/></button>}
+                </div>
+                <button class="clear-filters" (click)="clearFilters()">Clear all filters</button>
+              </div>
+            }
             <div class="bulk-toolbar" aria-label="Bulk order actions"><label class="selection-label"><input type="checkbox" aria-label="Select all visible eligible orders" [checked]="allVisibleChecked()" [indeterminate]="someVisibleChecked()" [disabled]="loading() || !!loadError() || bulkAssigning() || !visibleEligibleOrders().length" (change)="toggleVisibleSelection()">Select visible pending orders</label><span aria-live="polite">{{checkedOrders().length}} selected@if(hiddenCheckedCount()){ · {{hiddenCheckedCount()}} hidden by filters}</span><button class="text-button" (click)="clearOrderSelection()" [disabled]="bulkAssigning() || !checkedOrders().length">Clear</button><button class="primary" (click)="openBulkAssignment()" [disabled]="!checkedOrders().length || loading() || !!loadError() || assigning() || statusChanging() || bulkAssigning()">Assign selected</button></div>
             @if(orderView() !== 'table' && !loading() && !loadError() && visibleOrders().length){
               <app-order-views [orders]="visibleOrders()" [mode]="orderView() === 'board' ? 'board' : 'cards'" [checked]="checkedOrderIds()" [selectedId]="selectedOrderId()" [busy]="bulkAssigning()" [now]="clockNow()" [driverNames]="driverNames()" (open)="selectOrder($event)" (toggle)="toggleOrderSelection($event)"/>
@@ -75,7 +134,23 @@
               </tbody></table></div>}
             <div class="table-footer"><span>{{loading() || loadError() ? 'Orders unavailable' : visibleOrders().length + ' of ' + orders().length + ' orders'}}</span><span>Choose an order to review or assign</span></div>
           } @else {
-            <div class="table-toolbar"><label class="search-field"><app-icon name="search"/><input type="search" placeholder="Search name, code, phone or email" aria-label="Search drivers" [ngModel]="driverQuery()" (ngModelChange)="driverQuery.set($event)"></label><select aria-label="Filter driver availability" [ngModel]="driverFilter()" (ngModelChange)="driverFilter.set($event)"><option value="ALL">All statuses</option><option value="AVAILABLE">Available</option><option value="ON_DELIVERY">On delivery</option><option value="OFFLINE">Offline</option></select></div>
+            <div class="table-toolbar">
+              <label class="search-field">
+                <app-icon name="search"/>
+                <input type="search" placeholder="Search name, code, phone or email" aria-label="Search drivers" [ngModel]="driverQuery()" (ngModelChange)="driverQuery.set($event)">
+                @if(driverQuery().trim()){
+                  <button type="button" class="search-clear-btn" (click)="driverQuery.set('')" aria-label="Clear driver search">
+                    <app-icon name="close"/>
+                  </button>
+                }
+              </label>
+              <select class="driver-filter-select" aria-label="Filter driver availability" [ngModel]="driverFilter()" (ngModelChange)="driverFilter.set($event)">
+                <option value="ALL">All statuses</option>
+                <option value="AVAILABLE">Available</option>
+                <option value="ON_DELIVERY">On delivery</option>
+                <option value="OFFLINE">Offline</option>
+              </select>
+            </div>
             @if(driverView() === 'cards' && !driversLoading() && !driversError() && visibleDrivers().length){
               <div class="driver-cards">@for(driver of visibleDrivers(); track driver.id){<article class="driver-card" [class.selected-card]="selectedDriverId() === driver.id"><div class="driver-card-heading"><span class="avatar">{{driver.name.slice(0, 2).toUpperCase()}}</span><span class="status" [ngClass]="driver.status">{{driverStatusLabel(driver.status)}}</span></div><button class="record-link" (click)="selectDriver(driver.id)">{{driver.name}} <app-icon name="arrow"/></button><p class="cell-secondary">{{driver.employeeCode}} · {{vehicleLabel(driver.vehicleType)}}</p><div class="driver-card-capacity"><strong>{{driver.availableSpaces}}<small> / {{driver.capacity}}</small></strong><span>spaces free</span></div><div class="capacity-track"><span [style.width.%]="driver.capacity ? (driver.capacity - driver.availableSpaces) / driver.capacity * 100 : 0"></span></div>@if(driver.mobileNumber){<a class="contact-link" [href]="'tel:' + driver.mobileNumber"><app-icon name="phone"/>{{driver.mobileNumber}}</a>}@else{<p class="cell-secondary">Phone not added</p>}</article>}</div>
             } @else {<div class="table-scroll"><table><thead><tr><th scope="col">Driver</th><th scope="col">Status</th><th scope="col">Load / capacity</th><th scope="col">Free spaces</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead><tbody>
@@ -93,7 +168,20 @@
             @if(detailLoading()){<div class="inspector-empty" role="status"><span class="spinner"></span><p>Loading order details…</p></div>}
             @else if(detailError()){<div class="inspector-body"><p class="form-error" role="alert">{{detailError()}}</p><button class="secondary" (click)="retryDetails()">Retry details</button></div>}
             @else if(selectedOrder(); as order){
-              <div class="inspector-body"><div class="record-title"><span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span><h3>{{order.trackingNumber}}</h3><p>{{order.customer}}</p></div>
+              <div class="inspector-body">
+                <div class="record-title">
+                  <div class="record-title-header">
+                    <span class="status" [ngClass]="order.status">{{statusLabel(order.status)}}</span>
+                    <span class="order-id-badge">#{{order.id}}</span>
+                  </div>
+                  <div class="tracking-row">
+                    <h3>{{order.trackingNumber}}</h3>
+                    <button type="button" class="copy-tracking-btn" (click)="copyTracking(order.trackingNumber)" title="Copy tracking number" aria-label="Copy tracking number">
+                      <app-icon name="copy"/>
+                    </button>
+                  </div>
+                  <p class="customer-name">{{order.customer}}</p>
+                </div>
                 <div class="route"><div class="route-stop"><span class="route-dot"></span><div><span class="field-label">Pickup address</span><p>{{order.pickupAddress}}</p></div></div><div class="route-stop"><span class="route-dot destination-dot"></span><div><span class="field-label">Delivery address</span><p>{{order.destination}}</p></div></div></div>
                 <section class="schedule-detail" aria-label="Delivery window"><h4>Delivery window</h4>@if(order.deliveryWindowStart && order.deliveryWindowEnd){<p>{{order.deliveryWindowStart | date:'d MMM y, HH:mm'}}<br>to {{order.deliveryWindowEnd | date:'d MMM y, HH:mm'}}</p><span class="field-label">{{localTimeZone}}</span>@if(isOverdue(order)){<p class="schedule-tag overdue">Overdue · delivery window ended</p>}}@else{<p class="help-text">Not scheduled</p>}</section><div class="record-meta"><span>Order ID</span><strong>#{{order.id}}</strong></div>
                 <section class="lifecycle-section" aria-label="Delivery progress" [attr.aria-busy]="statusChanging()">

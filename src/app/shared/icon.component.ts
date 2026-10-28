@@ -22,7 +22,8 @@ const paths = {
   start: 'M4 5h8v14H4z M8 9l4 3-4 3 M16 8l4 4-4 4 M13 12h7',
   delivered: 'M3 6l7-3 7 3-7 4z M3 6v11l7 4 4-2 M10 10v11 M17 6v5 M15 15l3 3 4-5',
   history: 'M3 10a9 9 0 1 1 1 7 M3 4v6h6 M12 7v5l3 2',
-  capacity: 'M3 4h18v16H3z M3 9h18 M9 9v11 M15 9v11'
+  capacity: 'M3 4h18v16H3z M3 9h18 M9 9v11 M15 9v11',
+  copy: 'M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2z M4 8H2a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2'
 };
 
 // A shared two-tone treatment ties the operational symbols to the illustration palette.
@@ -34,7 +35,8 @@ const accents: Partial<Record<keyof typeof paths, string>> = {
   pin: 'M12 21s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12z',
   start: 'M4 5h8v14H4z',
   delivered: 'M3 6l7 4v11l-7-4z',
-  capacity: 'M3 9h6v11H3z M9 9h6v11H9z'
+  capacity: 'M3 9h6v11H3z M9 9h6v11H9z',
+  copy: 'M8 4h10v12H8z'
 };
 
 @Component({
