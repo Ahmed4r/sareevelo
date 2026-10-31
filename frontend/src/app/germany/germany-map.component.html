@@ -1,0 +1,66 @@
+<section class="map-workspace" aria-label="Germany map and service areas">
+  <div class="workspace-bar"><div class="workspace-title"><app-icon name="pin"/><div><h2>Germany operations</h2><p>Plan locations. Match the right service area.</p></div></div><span class="market">DE <span>Germany</span></span></div>
+  <div class="map-layout">
+    <aside class="location-panel" aria-label="Map controls">
+      <div class="panel-tabs" role="group" aria-label="Map workspace"><button type="button" [attr.aria-pressed]="mode === 'locations'" (click)="setMode('locations')">Order locations</button><button type="button" [attr.aria-pressed]="mode === 'coverage'" (click)="setMode('coverage')">Service areas</button></div>
+      <div class="panel-content">
+      @if(error()){<div class="error" role="alert">{{error()}} @if(mapFailed()){<button type="button" (click)="loadConfig()">Retry map</button>}</div>}
+      @if(message()){<p class="success" role="status">{{message()}}</p>}
+      @if(mode === 'locations'){
+        <p class="hint">Selecting an order looks up missing locations through Photon / OpenStreetMap. Only the addresses are sent.</p>
+        <label class="search-label">Find an order<input type="search" [(ngModel)]="orderSearch" placeholder="Tracking number or address" [disabled]="saving()"></label>
+        <label>Order<select [ngModel]="orderId" (ngModelChange)="loadOrder($event)" [disabled]="saving()"><option [ngValue]="null">Choose a delivery</option>@for(order of filteredOrders(); track order.id){<option [ngValue]="order.id">{{order.trackingNumber}} · {{order.status}}</option>}</select></label>
+        @if(!filteredOrders().length){<p class="hint">No matching orders. Try another search.</p>}
+        @if(loading()){<p class="hint" role="status">Loading saved locations…</p>}
+        @if(model; as value){
+          @if(locating()){<p class="lookup-note" role="status">Finding pickup and delivery addresses…</p>}
+          @if(lookupError()){<p class="error" role="alert">{{lookupError()}}</p>}
+          @if(!locating() && (lookupError() || lookupResult())){<button type="button" (click)="locate()" [disabled]="saving()">Retry missing locations</button>}
+          @if(lookupResult(); as found){
+            <div class="lookup-note"><strong>Suggested locations — verify before saving</strong><p>Search results may identify a street or city rather than the exact building. Drag pins to correct them.</p>
+            @for(kind of ['pickup', 'delivery']; track kind){
+              @if((kind === 'pickup' ? found.pickup : found.delivery); as match){
+                @if(match.status === 'NO_MATCH'){<p>{{kind === 'pickup' ? 'Pickup' : 'Delivery'}}: no match in Germany. Add a city/postcode in the order or place the pin manually.</p>}
+                @if(match.status === 'UNAVAILABLE'){<p>{{kind === 'pickup' ? 'Pickup' : 'Delivery'}} lookup is unavailable. Retry shortly or place a pin manually.</p>}
+                @if(match.candidates.length){<label>{{kind === 'pickup' ? 'Pickup' : 'Delivery'}} matches<select aria-label="Address match" [ngModel]="null" (ngModelChange)="applyCandidate(kind === 'pickup' ? 'pickup' : 'delivery', $event)" [disabled]="saving()"><option [ngValue]="null" disabled>Choose another match</option>@for(candidate of match.candidates; track $index){<option [ngValue]="candidate">{{candidate.label}}</option>}</select></label><p class="hint">First suggestion: {{match.candidates[0].label}}</p>}
+              }
+            }
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></div>
+          }
+          @if(value.stale){<p class="error">Addresses changed. Place and verify both pins again.</p>}
+          <div class="stop-card" [class.selected]="pinMode === 'pickup'"><button class="stop-heading" type="button" (click)="focusPin('pickup')" [attr.aria-pressed]="pinMode === 'pickup'"><span class="stop-letter pickup">A</span><span><strong>Pickup</strong><small>{{value.pickupLat !== null ? 'Pin placed' : 'Place on map'}}</small></span><app-icon name="pin"/></button><p class="address">{{value.pickupAddress}}</p>
+            <label>Federal state<select [(ngModel)]="value.pickupState" (ngModelChange)="changed()" [disabled]="!editable()"><option value="">Choose pickup state</option>@for(state of states(); track state.code){<option [value]="state.code">{{state.name}}</option>}</select></label>
+            <details><summary>Coordinates</summary><div class="coordinate-row"><label>Latitude<input aria-label="Pickup latitude" type="number" min="47.2" max="55.1" step="0.000001" [(ngModel)]="value.pickupLat" (ngModelChange)="coordinatesChanged()" [disabled]="!editable()"></label><label>Longitude<input aria-label="Pickup longitude" type="number" min="5.8" max="15.1" step="0.000001" [(ngModel)]="value.pickupLng" (ngModelChange)="coordinatesChanged()" [disabled]="!editable()"></label></div></details>
+          </div>
+          <div class="stop-card" [class.selected]="pinMode === 'delivery'"><button class="stop-heading" type="button" (click)="focusPin('delivery')" [attr.aria-pressed]="pinMode === 'delivery'"><span class="stop-letter delivery">B</span><span><strong>Delivery</strong><small>{{value.deliveryLat !== null ? 'Pin placed' : 'Place on map'}}</small></span><app-icon name="pin"/></button><p class="address">{{value.deliveryAddress}}</p>
+            <label>Federal state<select [(ngModel)]="value.deliveryState" (ngModelChange)="changed()" [disabled]="!editable()"><option value="">Choose delivery state</option>@for(state of states(); track state.code){<option [value]="state.code">{{state.name}}</option>}</select></label>
+            <details><summary>Coordinates</summary><div class="coordinate-row"><label>Latitude<input aria-label="Delivery latitude" type="number" min="47.2" max="55.1" step="0.000001" [(ngModel)]="value.deliveryLat" (ngModelChange)="coordinatesChanged()" [disabled]="!editable()"></label><label>Longitude<input aria-label="Delivery longitude" type="number" min="5.8" max="15.1" step="0.000001" [(ngModel)]="value.deliveryLng" (ngModelChange)="coordinatesChanged()" [disabled]="!editable()"></label></div></details>
+          </div>
+          <div class="save-panel"><label class="confirmation"><input type="checkbox" [(ngModel)]="confirmed" [disabled]="!editable()">I verified both locations and states are correct and within Germany.</label><button class="primary save-button" type="button" (click)="save()" [disabled]="!editable() || !confirmed || !validPins()">{{saving() ? 'Saving…' : 'Save locations'}}</button>
+          @if(!editable() && !saving()){<p class="hint">Only pending deliveries can be edited.</p>}</div>
+        } @else if(!loading()) {<div class="empty-state"><app-icon name="pin"/><h3>Where is this delivery going?</h3><p>Choose an order to see its addresses and place pickup and delivery pins.</p></div>}
+      } @else {
+      <section class="coverage" aria-label="Driver service areas">
+        <div><h3>Driver service areas</h3><p class="hint">A driver must cover both saved order states. Existing orders without locations keep workload-only suggestions.</p></div>
+        <label>Driver<select [ngModel]="driverId" (ngModelChange)="loadCoverage($event)" [disabled]="coverageSaving()"><option [ngValue]="null">Select a driver</option>@for(driver of drivers; track driver.id){<option [ngValue]="driver.id">{{driver.name}} · {{driver.employeeCode}}</option>}</select></label>
+        @if(coverageError()){<p class="error" role="alert">{{coverageError()}}</p>}
+        @if(coverageLoading()){<p role="status">Loading service areas…</p>}
+        @if(driverId !== null && coverageLoaded()){
+          <div class="coverage-actions"><button type="button" (click)="selectedStates = states().map(stateCode)" [disabled]="coverageSaving()">All Germany</button><button type="button" (click)="selectedStates = []" [disabled]="coverageSaving()">Clear selection</button></div>
+          <div class="state-grid">@for(state of states(); track state.code){<label class="confirmation"><input type="checkbox" [checked]="selectedStates.includes(state.code)" (change)="toggleState(state.code)" [disabled]="coverageSaving()">{{state.name}}</label>}</div>
+          <button type="button" class="primary" (click)="saveCoverage()" [disabled]="coverageSaving()">{{coverageSaving() ? 'Saving…' : 'Save service areas'}}</button>
+        }
+      </section>
+      }
+      </div>
+    </aside>
+    <div class="map-pane" [attr.data-map-style]="resolvedMapStyle()">
+      <div class="map-toolbar"><label class="city-select"><app-icon name="search"/><select aria-label="Go to a German city" [ngModel]="city" (ngModelChange)="goToCity($event)"><option value="">Explore Germany</option>@for(item of cities; track item.name){<option [value]="item.name">{{item.name}}</option>}</select></label><button type="button" class="fit-button" (click)="fitLocations()"><app-icon name="pin"/>{{model ? 'Fit locations' : 'Show Germany'}}</button></div>
+      <label class="map-style-control">Map colors<select [ngModel]="mapStyle()" (ngModelChange)="setMapStyle($event)" aria-label="Map color style"><option value="auto">Match app theme</option><option value="light">Light roads</option><option value="dark">Dark roads</option><option value="original">Original colors</option></select></label>
+      <div #mapHost class="map-canvas" role="region" aria-label="Interactive Germany map. Coordinate fields provide a keyboard alternative."></div>
+      @if(tileError()){<div class="map-notice" role="status">Map tiles are unavailable. Retry or enter coordinates.<button type="button" (click)="retryTiles()">Retry tiles</button></div>}
+      <div class="map-instruction" aria-live="polite"><span class="instruction-dot" [class.delivery]="pinMode === 'delivery'"></span>@if(mode === 'locations' && editable()){<span>Click the map to place <strong>{{pinMode === 'pickup' ? 'A · pickup' : 'B · delivery'}}</strong>. Drag a pin to adjust.</span>}@else {<span>{{mode === 'coverage' ? 'Service areas apply to the selected driver. The map shows order locations.' : 'Select an order to place its locations.'}}</span>}</div>
+    </div>
+  </div>
+  <div class="map-footer"><span><span class="legend-dot pickup"></span>A Pickup <span class="legend-dot delivery"></span>B Delivery</span><span>Manually verified locations · No live GPS or road routing</span></div>
+</section>
