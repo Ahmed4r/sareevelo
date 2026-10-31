@@ -1,11 +1,66 @@
 openapi: 3.0.3
 info:
   title: SAREEVELO Scheduled Order Workflows
-  version: 1.2.0
-  description: Creation, pending-order editing, and lifecycle transitions. Existing assignment and activity endpoints are not described by this scoped contract.
+  version: 1.4.0
+  description: Creation, pending-order editing, lifecycle transitions, driver suggestions and optional AI explanations. Existing assignment and activity endpoints are not described by this scoped contract.
 servers:
   - url: http://localhost:8080
 paths:
+  /api/v1/orders/{id}/driver-suggestions/explain:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      operationId: explainDriverSuggestions
+      description: Recomputes suggestions and optionally calls Groq with anonymous numeric facts. Never assigns or reserves capacity. Consumes provider quota; do not automatically retry. Missing configuration and provider failures return RULES guidance with HTTP 200.
+      responses:
+        '200':
+          description: Fresh suggestions with a separately labeled explanation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions, explanation]
+                properties:
+                  suggestions:
+                    $ref: '#/paths/~1api~1v1~1orders~1{id}~1driver-suggestions/get/responses/200/content/application~1json/schema'
+                  explanation:
+                    type: object
+                    required: [source, text]
+                    properties:
+                      source: { type: string, enum: [AI, RULES] }
+                      text: { type: string }
+        '404': { description: Order not found. }
+        '409': { description: Order is no longer pending and unassigned. }
+  /api/v1/orders/{id}/driver-suggestions:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    get:
+      operationId: suggestDrivers
+      description: Read-only suggestions for a pending, unassigned order. Excludes offline, full, or inconsistent-capacity drivers. Returns at most three drivers ordered by occupied capacity ascending, assignments today ascending, oldest last assignment (no recorded assignment first), then ID for an exact tie. Today uses dispatch.time-zone (Europe/Berlin by default). Counts persisted DRIVER_ASSIGNED events including completed/cancelled orders; missing history means no recorded assignment, not proof of no prior work. Does not reserve capacity; assignment revalidates eligibility. No route or ETA prediction.
+      responses:
+        '200':
+          description: Ranked suggestions; an empty array means no eligible drivers.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 3
+                items:
+                  type: object
+                  required: [driverId, name, employeeCode, availableSpaces, capacity, activeOrders, assignmentsToday, lastAssignedAt, dispatchTimeZone, reason]
+                  properties:
+                    driverId: { type: integer, format: int64 }
+                    name: { type: string }
+                    employeeCode: { type: string }
+                    availableSpaces: { type: integer, minimum: 1 }
+                    capacity: { type: integer, minimum: 1 }
+                    activeOrders: { type: integer, minimum: 0 }
+                    assignmentsToday: { type: integer, format: int64, minimum: 0 }
+                    lastAssignedAt: { type: string, format: date-time, nullable: true }
+                    dispatchTimeZone: { type: string, example: Europe/Berlin }
+                    reason: { type: string }
+        '404': { description: Order not found. }
+        '409': { description: Order is no longer pending and unassigned. }
   /api/v1/orders:
     get:
       operationId: listOrders

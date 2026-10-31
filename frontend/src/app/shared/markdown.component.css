@@ -1,0 +1,12 @@
+app-markdown { display:block; min-width:0; }
+app-markdown .markdown-body { font-size:14px; line-height:1.75; color:var(--text); overflow-wrap:anywhere; overflow-x:auto; }
+app-markdown .markdown-body > :first-child { margin-top:0; } app-markdown .markdown-body > :last-child { margin-bottom:0; }
+app-markdown :is(h1,h2,h3,h4,h5,h6) { line-height:1.35; margin:1.3em 0 .6em; font-weight:650; }
+app-markdown h1 { font-size:23px; } app-markdown h2 { font-size:20px; } app-markdown h3 { font-size:17px; }
+app-markdown p { margin:.65em 0; } app-markdown :is(ul,ol) { padding-left:1.6em; margin:.7em 0; } app-markdown li { margin:.3em 0; }
+app-markdown a { color:var(--accent-text); text-decoration:underline; text-underline-offset:3px; }
+app-markdown blockquote { margin:1em 0; padding:4px 16px; border-left:3px solid var(--accent-text); background:var(--inset); }
+app-markdown pre { overflow-x:auto; background:var(--inset); padding:14px; border:1px solid var(--border); border-radius:6px; white-space:pre; }
+app-markdown code { font:12px/1.65 var(--font-mono); background:var(--inset); padding:2px 4px; border-radius:3px; } app-markdown pre code { padding:0; }
+app-markdown table { border-collapse:collapse; font-size:13px; width:100%; margin:1em 0; } app-markdown :is(th,td) { border:1px solid var(--border); padding:9px 12px; text-align:left; } app-markdown th { background:var(--inset); }
+app-markdown hr { border:0; border-top:1px solid var(--border); margin:1.4em 0; }
