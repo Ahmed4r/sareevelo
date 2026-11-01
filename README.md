@@ -82,17 +82,19 @@ cd frontend
 npm run build:production
 npm audit --omit=dev --audit-level=high
 cd ../backend
-.\mvnw.cmd clean package -Dmaven.test.skip=true
+.\mvnw.cmd clean verify
 ```
 
-CI builds both applications and container images and audits frontend runtime dependencies. Test suites and mock fixtures were removed at the project owner's request; build checks do not establish behavioral correctness.
+CI builds both applications and container images, audits frontend runtime dependencies, and runs seven backend workflow tests against a disposable PostgreSQL 17 service. The tests exercise concurrent assignment, terminal-state races, transaction rollback, lifecycle rules and geographic coverage. Frontend browser workflows remain untested.
+
+Backend tests require a **dedicated disposable database**: set `TEST_DB_URL`, `TEST_DB_USER` and `TEST_DB_PASSWORD` before running `clean verify`. The test profile uses `create-drop` and deletes the schema in that database. Never use your application database. Example URL: `jdbc:postgresql://localhost:5432/sareevelo_test`. Tests do not call Groq or the address provider. Surefire reports are uploaded by CI even when tests fail.
 
 ## Screenshots
 
-### Dashboard — light theme
+### Dashboard â€” light theme
 ![Dispatch dashboard in light theme](docs/images/home_light.png)
 
-### Dashboard — dark theme
+### Dashboard â€” dark theme
 ![Dispatch dashboard in dark theme](docs/images/home_dark.png)
 
 ### Orders
